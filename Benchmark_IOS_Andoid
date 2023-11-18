@@ -1,0 +1,64 @@
+import json
+import requests
+from bs4 import BeautifulSoup
+import boto3
+import requests
+import time
+
+
+def lambda_handler(event, context):
+    
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('kingdomcome')  # Replace with your table name
+
+    url = "https://browser.geekbench.com/android-benchmarks"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    AndroidPhones_singlecore = soup.find('table', class_="table benchmark-chart-table").find('tbody').find_all('tr')
+    AndroidPhones_multicore = soup.find_all('table', class_="table benchmark-chart-table")[1].find('tbody').find_all('tr')
+    time.sleep(1)
+    for phone in AndroidPhones_singlecore:
+        name1 = phone.a.text
+        processor = phone.find('div', class_='description').text.split("@")[0]
+        ghz = phone.find('div', class_='description').text.split("@")[1]
+        benchmark_singlecore = phone.find('td', class_='score').text
+        for multi in AndroidPhones_multicore:
+            name2 = multi.a.text
+            benchmark_multicore = multi.find('td', class_='score').text
+            if name1 == name2:
+            # Put item in DynamoDB
+                table.put_item(Item={
+                    'Name': name1,
+                    'Processor': processor,
+                    'GHz': ghz,
+                    'SingleCore': benchmark_singlecore,
+                    'Multicore' : benchmark_multicore
+                })
+    url2 = "https://browser.geekbench.com/ios-benchmarks"
+    response = requests.get(url2)
+    soup2 = BeautifulSoup(response.text, 'html.parser')
+
+    IOS_singlecore = soup2.find('table', class_="table benchmark-chart-table").find('tbody').find_all('tr')
+    IOS_multicore = soup2.find_all('table', class_="table benchmark-chart-table")[1].find('tbody').find_all('tr')
+    time.sleep(1)
+    for phone in IOS_singlecore:
+        name1 = phone.a.text
+        processor = phone.find('div', class_='description').text.split("@")[0]
+        ghz = phone.find('div', class_='description').text.split("@")[1]
+        benchmark_singlecore = phone.find('td', class_='score').text
+        for multi in IOS_multicore:
+            name2 = multi.a.text
+            benchmark_multicore = multi.find('td', class_='score').text
+            if name1 == name2 and 'iPhone' in name2:
+            # Put item in DynamoDB
+                table.put_item(Item={
+                    'Name': name1,
+                    'Processor': processor,
+                    'GHz': ghz,
+                    'SingleCore': benchmark_singlecore,
+                    'Multicore' : benchmark_multicore
+                })
+    
+    return {"message": "Data uploaded successfully to DynamoDB"}
+
