@@ -10,7 +10,7 @@ import dotenv_setting
 dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
 table = dynamodb.Table("ScrapingPhoneStatus")
 response = table.scan()
-data = response["Items"][:5]
+data = response["Items"]
 
 embedding = OpenAIEmbeddings()
 
