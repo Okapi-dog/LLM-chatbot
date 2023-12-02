@@ -67,13 +67,13 @@ def get_context(input):#ドキュメントから要件の要約をもとに検�
             return phone.get_retrieve(sum_to_requirements(input["history"],input["input"]))
 
 def next_lambda(message,log_message,event):#次のラムダ関数を呼び出す
-     # 次のラムダ関数を呼び出す (-> plain_text_output)
+    # 次のラムダ関数を呼び出す (-> plain_text_output)
     lambda_client = boto3.client('lambda')
     #ARN of plain_text_output
     next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
     response = lambda_client.invoke(
         FunctionName=next_function_name,
-        InvocationType='RequestResponse',
+        InvocationType='Event',
         Payload=json.dumps({'input_text': message, 'replyToken': event['replyToken'], 'userId': event['userId']} )
     )
     return log_message+event['userId']
