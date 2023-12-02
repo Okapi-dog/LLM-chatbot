@@ -207,7 +207,15 @@ def lambda_handler(event, context):
         print('Error!')
         print(e)
         raise e
-
+    # 次のラムダ関数を呼び出す (-> delete_backn)
+    lambda_client = boto3.client('lambda')
+    #ARN of plain_text_output
+    next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:delete_backn'
+    response = lambda_client.invoke(
+        FunctionName=next_function_name,
+        InvocationType='Event',
+        Payload=json.dumps({})
+    )
     return {
         'statusCode': 200,
         'body': json.dumps('Successfully completed.')#終了宣言
