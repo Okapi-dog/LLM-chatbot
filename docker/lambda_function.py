@@ -15,10 +15,14 @@ from langchain.callbacks.tracers import ConsoleCallbackHandler
 from langchain.llms import OpenAI
 from operator import itemgetter
 from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.memory import ConversationBufferMemory,ConversationSummaryBufferMemory
 from langchain.schema import messages_from_dict, messages_to_dict
 from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
+#以下はOutputParserのためのインポート
+from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
+from langchain.pydantic_v1 import BaseModel,Field #pydanticはv1とv2があるが、v2は新しく破壊的変更が多く、内部的にも使用されていないのでv1を使用する
+from typing import List
 
 
 
@@ -66,15 +70,21 @@ def get_context(input):#ドキュメントから要件の要約をもとに検�
             phone=retriever.retrieve()
             return phone.get_retrieve(sum_to_requirements(input["history"],input["input"]))
 
-def next_lambda(message,log_message,event):#次のラムダ関数を呼び出す
+class output(BaseModel):#返事のクラス
+     choices_num: int =Field(desription="選択肢の数。選択肢がない場合は0とする")
+     AI_reply: str =Field(desription="質問と選択肢を含めたAIの返答(項目間は改行を入れる)")
+
+
+def next_lambda(message,choices_num,log_message,event):#次のラムダ関数を呼び出す
     # 次のラムダ関数を呼び出す (-> plain_text_output)
     lambda_client = boto3.client('lambda')
     #ARN of plain_text_output
-    next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
+    #next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
+    next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:line_question_option_output'
     response = lambda_client.invoke(
         FunctionName=next_function_name,
         InvocationType='Event',
-        Payload=json.dumps({'input_text': message, 'replyToken': event['replyToken'], 'userId': event['userId']} )
+        Payload=json.dumps({'input_text': message, 'choices_num':choices_num, 'replyToken': event['replyToken'], 'userId': event['userId']} )
     )
     return log_message+event['userId']
     
@@ -127,14 +137,22 @@ New lines of conversation:
 
 New summary:""")
 
-
     model = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
+    parser=PydanticOutputParser(pydantic_object=output)
+    fixing_parser=OutputFixingParser(parser=parser,llm=model)
+    system_template = PromptTemplate(
+            input_variables=[],
+            template="質問と選択肢、選択肢と選択肢の間には改行を入れること。日本語で会話すること。\n{format_instructions}",
+            partial_variables={"format_instructions": parser.get_format_instructions()}
+            )
+    system_message_prompt = SystemMessagePromptTemplate(prompt=system_template)
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。あなたは既に何回か質問をしており、あなたは次のような会話の要約や直近の会話の履歴を思い出すことが出来ます。日本語で会話すること。"),
+            ("system", "あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。あなたは既に何回か質問をしており、あなたは次のような会話の要約や直近の会話の履歴を思い出すことが出来ます。"),
             MessagesPlaceholder(variable_name="history"),
-            ("system","次の情報は最新の情報です。{context}"),
-            ("human", "{input}")
+            ("human", "{input}"),
+            #("system","次の情報は最新の情報です。{context}"),
+            system_message_prompt
         ]
     )
     #memory = ConversationSummaryBufferMemory(llm=OpenAI(temperature=0),max_token_limit=200,return_messages=True,prompt=summary_prompt2)
@@ -148,7 +166,7 @@ New summary:""")
                 'userId': event['userId']
             }
         )
-        return next_lambda("履歴をクリアしました","clear memory of",event)
+        return next_lambda("履歴をクリアしました",0,"clear memory of",event)
     
         
     table_response = table.get_item(
@@ -162,17 +180,16 @@ New summary:""")
         print("以下は読み出したメモリー(memory.chat_memory.messages, memory.moving_summary_buffer,memory.load_memory_variables)")
         print(memory.chat_memory.messages)
         print(memory.load_memory_variables({}))
+        
             
         #最初の一回目の会話以外用のchain
         chain = (
             RunnablePassthrough.assign(
                 history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
             )
-            |RunnablePassthrough.assign(
-                context=RunnableLambda(get_context)
-            )
             | prompt
             | model
+            | parser
         )
         inputs = {"input":  event['input_text']}
         response=chain.invoke(inputs)
@@ -180,25 +197,27 @@ New summary:""")
     else:
         #最初の一回目の会話用のchainなど
         firstmodel = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=500)
-        firstprompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", "あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。日本語で会話すること")
-            ]
-        )
+        first_system_template = PromptTemplate(
+            input_variables=["input"],
+            template="あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。日本語で会話すること。質問と選択肢、選択肢と選択肢の間には改行を入れること。\n{format_instructions}",
+            partial_variables={"format_instructions": parser.get_format_instructions()}
+            )
+        first_system_message_prompt = SystemMessagePromptTemplate(prompt=first_system_template)
+        firstprompt = ChatPromptTemplate.from_messages([first_system_message_prompt])
         firstchain = (
             firstprompt
             | firstmodel
+            | parser
         )
-        inputs = {"input": "質問を始めてください"}
+        inputs = {"input":  "質問を始めてください"}
         response=firstchain.invoke(inputs)
 
-    print("System: " + response.content)
-    memory.save_context(inputs, {"output": response.content})   #memoryに会話を記憶。下はtableに記憶を保存する部分
+    print("System: " + response.AI_reply)
+    memory.save_context(inputs, {"output": response.AI_reply})   #memoryに会話を記憶。下はtableに記憶を保存する部分
     table.put_item(Item={
                     'userId': event['userId'],
                     'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
-                    #,'moving_summary_buffer': memory.moving_summary_buffer
                 })
     
     
-    return next_lambda(response.content,"reply to",event)
+    return next_lambda(response.AI_reply, response.choices_num, "reply to", event)
