@@ -148,12 +148,25 @@ New summary:""")
     system_message_prompt = SystemMessagePromptTemplate(prompt=system_template)
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。あなたは既に何回か質問をしており、あなたは次のような会話の要約や直近の会話の履歴を思い出すことが出来ます。"),
+            ("system", "あなたは質問をしておすすめのスマホを複数台教えるチャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ます。質問は3個から5個の選択肢(a,b,c,d,e,f(分からない))で回答可能な形式でなければならない。人間は選択肢の内から一つを選んで回答をする。質問は一つずつすること。回答を待ってから回答を参考にして次の質問をすること。あなたは既に何回か質問をしており、あなたは次のような会話の要約や直近の会話の履歴を思い出すことが出来ます。質問と選択肢、選択肢と選択肢の間には改行を入れること。日本語で会話すること。"),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{input}"),
             #("system","次の情報は最新の情報です。{context}"),
-            system_message_prompt
         ]
+    )
+    prompt_choicesnum=PromptTemplate(
+        input_variables=["question"],
+        template='''AIの返答から、AIの質問の選択肢の数(整数)を答えてください。返答に選択肢が存在しない場合は0と答えてください。例を参考に選択肢の数を答えてください。例は選択肢の数に含めないでください。
+        例:
+        AI:
+        次の質問です。あなたはどのような用途でスマホを使用しますか？\na) ゲームをする\nb) 写真を撮る\nc) 仕事や学業に使う\nd) 動画を視聴する\ne) 音楽を聴く
+        選択肢の数:
+        5
+        例の終わり
+        AI:
+        {question}
+        選択肢の数:
+        '''
     )
     #memory = ConversationSummaryBufferMemory(llm=OpenAI(temperature=0),max_token_limit=200,return_messages=True,prompt=summary_prompt2)
     memory = ConversationBufferMemory(return_messages=True)#全ての会話履歴を保存するメモリー(ただし、今後は制限をかける予定)
@@ -189,10 +202,31 @@ New summary:""")
             )
             | prompt
             | model
-            | parser
         )
+        chain_choicesnum = (
+            prompt_choicesnum
+            | model
+        )
+
         inputs = {"input":  event['input_text']}
-        response=chain.invoke(inputs)
+        response=chain.invoke(inputs).content
+        choices_num=chain_choicesnum.invoke({"question":response}).content
+        try:
+             choices_num=int(choices_num)
+        except ValueError:
+            choices_num=0
+        
+        print("System: " + response)
+        print("choices_num: " + str(choices_num))
+        memory.save_context(inputs, {"output": response})   #memoryに会話を記憶。下はtableに記憶を保存する部分
+        table.put_item(Item={
+                        'userId': event['userId'],
+                        'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
+                    })
+    
+    
+        return next_lambda(response, choices_num, "reply to", event)
+
 
     else:
         #最初の一回目の会話用のchainなど
@@ -212,12 +246,12 @@ New summary:""")
         inputs = {"input":  "質問を始めてください"}
         response=firstchain.invoke(inputs)
 
-    print("System: " + response.AI_reply)
-    memory.save_context(inputs, {"output": response.AI_reply})   #memoryに会話を記憶。下はtableに記憶を保存する部分
-    table.put_item(Item={
-                    'userId': event['userId'],
-                    'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
-                })
+        print("System: " + response.AI_reply)
+        memory.save_context(inputs, {"output": response.AI_reply})   #memoryに会話を記憶。下はtableに記憶を保存する部分
+        table.put_item(Item={
+                        'userId': event['userId'],
+                        'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
+                    })
     
     
-    return next_lambda(response.AI_reply, response.choices_num, "reply to", event)
+        return next_lambda(response.AI_reply, response.choices_num, "reply to", event)
