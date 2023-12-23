@@ -18,6 +18,6 @@ embedding = OpenAIEmbeddings()
 with open("vectorstore.pkl", "wb") as f:
     for item in data:
         # 各カラムを一つのテキストとして連結
-        text = " ".join(str(value) for value in item.values())
-        vector = FAISS.from_texts(text, embedding)
+        item_str = " ".join([f"{key}:{value}" for key, value in item.items()])  
+        vector = FAISS.from_texts(item_str, embedding)
         pickle.dump(vector, f)
