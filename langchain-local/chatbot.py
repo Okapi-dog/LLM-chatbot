@@ -16,6 +16,7 @@ from langchain.vectorstores import FAISS
 
 # S3からダウンロードするファイルの設定
 BUCKET_NAME: Final = "vector-store-s3"
+TABLE_NAME: Final = "ScrapingPhoneStatus"
 FAISS_FILE_PATH: Final = "index.faiss"
 PKL_FILE_PATH: Final = "index.pkl"
 
@@ -29,8 +30,12 @@ class Retrieval:
         # 一時ディレクトリの作成
         with tempfile.TemporaryDirectory() as tmp_dir:
             # S3からファイルをダウンロード
-            self.__s3.download_file(BUCKET_NAME, FAISS_FILE_PATH, os.path.join(tmp_dir, FAISS_FILE_PATH))
-            self.__s3.download_file(BUCKET_NAME, PKL_FILE_PATH, os.path.join(tmp_dir, PKL_FILE_PATH))
+            self.__s3.download_file(
+                BUCKET_NAME, os.path.join(TABLE_NAME, FAISS_FILE_PATH), os.path.join(tmp_dir, FAISS_FILE_PATH)
+            )
+            self.__s3.download_file(
+                BUCKET_NAME, os.path.join(TABLE_NAME, PKL_FILE_PATH), os.path.join(tmp_dir, PKL_FILE_PATH)
+            )
             embedding = OpenAIEmbeddings()
             # FAISSインデックスのロード
             self.__vector_store = FAISS.load_local(tmp_dir, embedding)
@@ -100,11 +105,16 @@ async def generate_recommendations(request: str, answer_dict: dict[str, str]) ->
     return recommendations
 
 
+async def process_answer(request: str, answer: Document) -> list[str]:
+    # Document型からdict型への変換と推薦文の生成を非同期実行
+    answer_dict = await convert_to_dict(answer.page_content)
+    response = await generate_recommendations(request, answer_dict)
+    return response
+
+
 async def process_answers(request: str, answers: list[Document]) -> list[list[str]]:
-    # Document型をdict型に変換と推薦文の生成を非同期実行
-    answer_dicts = await asyncio.gather(*[convert_to_dict(answer.page_content) for answer in answers])
-    responses = await asyncio.gather(*[generate_recommendations(request, answer_dict) for answer_dict in answer_dicts])
-    return responses
+    processing_tasks = [process_answer(request, answer) for answer in answers]
+    return await asyncio.gather(*processing_tasks)
 
 
 if __name__ == "__main__":
@@ -112,7 +122,7 @@ if __name__ == "__main__":
 
     query = "撥水性があり、カメラの性能が良く、iPhone 12 Pro Maxに近いスペックのスマートフォンについて教えてください"
     retrival = Retrieval()
-    answers = retrival.retrieve(query)
+    answers: list[Document] = retrival.retrieve(query)
     responses = asyncio.run(process_answers(query, answers))
 
     end_time = time()
