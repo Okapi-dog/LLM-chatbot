@@ -100,7 +100,7 @@ async def generate_recommendations(request: str, answer_dict: dict[str, str]) ->
     return recommendations
 
 
-async def process_answers(request: str, answers: list[Document]) -> list[dict[str, str]]:
+async def process_answers(request: str, answers: list[Document]) -> list[list[str]]:
     # Document型をdict型に変換と推薦文の生成を非同期実行
     answer_dicts = await asyncio.gather(*[convert_to_dict(answer.page_content) for answer in answers])
     responses = await asyncio.gather(*[generate_recommendations(request, answer_dict) for answer_dict in answer_dicts])
