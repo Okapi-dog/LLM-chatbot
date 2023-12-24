@@ -50,8 +50,10 @@ class Retrieval:
 
 async def convert_to_dict(input_str: str) -> dict[str, str]:
     result_dict = {}
+    # 正規表現でkeyとvalueを取得
     pairs = re.findall(r"([^:|]+):([^|]*)", input_str)
     for pair in pairs:
+        # 値が空文字列でない場合のみ辞書に追加
         if pair[1].strip():
             key, value = pair
             result_dict[key.strip()] = value.strip()
@@ -91,12 +93,15 @@ async def generate_recommendations(request: str, answer_dict: dict[str, str]) ->
     model = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
+    # 推薦文の生成を非同期実行
     recommendations = await chain.ainvoke({"request": request, "answer_dict": answer_dict})
+    # 生成した推薦文を改行で区切ってリストに格納
     recommendations = [recommendation.strip() for recommendation in recommendations.split("\n", 2)]
     return recommendations
 
 
 async def process_answers(request: str, answers: list[Document]) -> list[dict[str, str]]:
+    # Document型をdict型に変換と推薦文の生成を非同期実行
     answer_dicts = await asyncio.gather(*[convert_to_dict(answer.page_content) for answer in answers])
     responses = await asyncio.gather(*[generate_recommendations(request, answer_dict) for answer_dict in answer_dicts])
     return responses
