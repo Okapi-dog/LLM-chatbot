@@ -3,9 +3,14 @@ import sys
 import os
 import boto3
 import json
+import asyncio
 
 #retriever.pyのインポート
 import retriever
+
+#recommend.pyのインポート
+from recommend import process_answers
+from recommend import convert_to_dict
 
 #langchainのインポート
 import langchain
@@ -22,12 +27,12 @@ from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
 #以下はDocumentStoreのためのインポート
 from langchain.docstore.document import Document
 
-info=[Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]#infoの初期化
+phones_info: list[Document] = [Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]#phones_infoの初期化
 
 
 
 
-def sum_to_requirements(history,newinput):  #検索用に要件をまとめる
+def get_requirements(history,newinput):  #検索用に要件をまとめる
 
     model = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
     summary_prompt = PromptTemplate(
@@ -68,18 +73,25 @@ B
     return response.content
 
 
-def get_context(input):#ドキュメントから要件の要約をもとに検索する
-    global info
-    phone=retriever.retrieve()
-    sum=sum_to_requirements(input["history"],input["input"])
-    info=phone.get_retrieve(sum)
-    print(info)
-    return info
+def send_recommendations(input):#recommend.pyを呼び出しておすすめを返す
+    global phones_info
+    retrival=retriever.Retrieval()
+    requirements=get_requirements(input["history"],input["input"])
+    phones_info=retrival.retrieve(requirements)
+    phones_info_dict=[convert_to_dict(phone_info.page_content) for phone_info in phones_info]
+    killer_sentences = asyncio.run(process_answers(requirements, phones_info_dict))
+    print(phones_info)
+    print(killer_sentences)
+    reply=""#Line用の返答を作成
+    for i in range(len(phones_info)):
+        reply=reply+"\n機種名:"+phones_info_dict[i]["機種"]+"\nキラー文"
+        for j in range(len(killer_sentences[i])):
+            reply=reply+"\n"+killer_sentences[i][j]
+    return reply
 
 
 
 def next_lambda(message,choices_num,log_message,event):#次のラムダ関数を呼び出す
-    # 次のラムダ関数を呼び出す (-> plain_text_output)
     lambda_client = boto3.client('lambda')
     #ARN of plain_text_output
     #next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
@@ -96,7 +108,8 @@ def next_lambda(message,choices_num,log_message,event):#次のラムダ関数を
 
 def handler(event, context):
 
-    model = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
+    model       = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
+    gpt4_model  = ChatOpenAI(model_name="gpt-4-1106-preview",max_tokens=1000)
     prompt_question=ChatPromptTemplate.from_messages(
         [
             ("system", """あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、スマートフォン選びに関する質問を行い、ユーザーのニーズを理解することです。
@@ -126,7 +139,7 @@ def handler(event, context):
         {question}
         選択肢の数:
         '''
-    )
+    ) 
     chain_choicesnum = (
             prompt_choicesnum
             | model
@@ -160,34 +173,25 @@ def handler(event, context):
             
         #最初の一回目の会話以外用のchain
         decision_model = OpenAI(model_name="gpt-3.5-turbo-instruct",max_tokens=1000)
-        gpt4_model=ChatOpenAI(model_name="gpt-4-1106-preview",max_tokens=500)
-        decision_prompt=PromptTemplate(
-        input_variables=["history", "input"],
-        template='''1. まず、AIがユーザーに対して行った質問の数を確認します。最低4つの質問が必要です。2. 次に、これらの質問がユーザーのニーズや好みを十分に理解するために効果的であったかを検討します。
-- **質問が4つ以上行われ、かつそれらの質問がユーザーのニーズを明確にしていると判断される場合**にのみ、「T」と返答します。
-- **質問が4つ未満である場合、または4つ以上質問があってもユーザーのニーズがまだ十分に明確でないと判断される場合**は、「F」と返答します。
-{history}は過去の全会話履歴、{input}はユーザーの最新の回答を指します。これらの情報を基に、ユーザーのニーズに最適な応答を選択してください。''')
-        
-        decision_prompt2 = ChatPromptTemplate.from_messages(
-        [
+        #質問と提案の判断を行うプロンプトとチェーン
+
+        decision_prompt = ChatPromptTemplate.from_messages([
             ("system", """あなたはスマートフォンに関する推薦を行うチャットボットです。会話履歴の分析を通じて、ユーザーに対して更なる質問を行うか、もしくはスマートフォンの推薦に進むかを判断するのがあなたの役割です。以下のガイドラインに従って次のステップを決定してください：
 AIがこれまでの会話でユーザーに最低4つの質問を行っているかを確認します。
 これらの質問がユーザーのニーズや好みを明らかにするのに十分かどうかを検討します。
 もしAIが4つ以上の質問を行っていて、かつそれらの質問がユーザーのニーズを明確にしていると判断できる場合は、「T」と返答します。
 もしAIが4つ未満の質問しかしていないか、または4つ以上の質問をしていてもユーザーのニーズがまだ十分に明確ではないと判断される場合は、「F」と返答します。
 以下は直近の会話履歴です。                         
-             """),
+            """),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{input}"),
             ("system","これらの情報を基にして、ユーザーに最適な応答をTかFで選択してください。ユーザーの要望を正確に理解し、適切な推薦を行うことが重要です。"),
-        ]
-    )
-        
+        ])
         decision_chain=(
             RunnablePassthrough.assign(
                 history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
             )
-            |decision_prompt2
+            |decision_prompt
             | gpt4_model
         )
         
@@ -198,8 +202,9 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         decision_response = decision_response.replace(" ", "").replace("\n", "").replace("\t", "")
         print("\n次の行動:\n")
         print(decision_response)
-        #print(decision_response.content)
-        if decision_response=="T":
+        if decision_response=="T":#提案を行う
+            inputs = {"input":  event['input_text'], "history":memory.chat_memory.messages}
+            return next_lambda(send_recommendations(inputs),0,"reply to",event)
             second_chain=(
                 RunnablePassthrough.assign(
                     history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
@@ -209,7 +214,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             )
             print("正常におすすめ提案。次の行動:"+decision_response)
             response=second_chain.invoke(inputs)
-        elif decision_response=="F":
+        elif decision_response=="F":#質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
                     history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
@@ -219,7 +224,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             )
             print("正常に質問。次の行動:"+decision_response)
             response=second_chain.invoke(inputs)
-        else:
+        else:#分岐が不正な値の時でも質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
                     history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
@@ -230,27 +235,29 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             print("不正に質問。次の行動:"+decision_response)
             response=second_chain.invoke(inputs)
         
+        #下は選択肢の数を取得する部分
         choices_num=chain_choicesnum.invoke({"question":response.content}).content
         try:
              choices_num=int(choices_num)
         except ValueError:
             choices_num=0
         
+        #下はログを出力する部分
         print("System: " + response.content)
         print("choices_num: " + str(choices_num))
-        memory.save_context(inputs, {"output": response.content})   #memoryに会話を記憶。下はtableに記憶を保存する部分
+
+        #memoryに会話を記憶。下はtableに記憶を保存する部分
+        memory.save_context(inputs, {"output": response.content})   
         table.put_item(Item={
                         'userId': event['userId'],
                         'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
                     })
     
-    
-        #return next_lambda(response+"\n下記はデバック用\n" +info[0].page_content+"\n"+info[1].page_content, choices_num, "reply to", event)
         return next_lambda(response.content, choices_num, "reply to", event)
 
 
     else:
-        #最初の一回目の会話用のchainなど
+        #最初の一回目の会話用のchain
         firstmodel = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=500)
         firstprompt = PromptTemplate(
             input_variables=["input"],
@@ -267,16 +274,19 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         response=firstchain.invoke(inputs)
 
         print("System: " + response.content)
-        memory.save_context(inputs, {"output": response.content})   #memoryに会話を記憶。下はtableに記憶を保存する部分
+
+        #memoryに会話を記憶。下はtableに記憶を保存する部分
+        memory.save_context(inputs, {"output": response.content})
         table.put_item(Item={
                         'userId': event['userId'],
                         'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
                     })
+        
+        #下は選択肢の数を取得する部分
         choices_num=chain_choicesnum.invoke({"question":response.content}).content
         try:
              choices_num=int(choices_num)
         except ValueError:
             choices_num=0
-    
     
         return next_lambda(response.content, choices_num, "reply to", event)
