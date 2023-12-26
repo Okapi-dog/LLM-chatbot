@@ -1,0 +1,221 @@
+{
+  "type": "bubble",
+  "header": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [
+      {
+        "type": "text",
+        "text": "Q1",
+        "size": "xl",
+        "weight": "bold",
+        "align": "center",
+        "color": "#000000"
+      }
+    ]
+  },
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [
+      {
+        "type": "text",
+        "text": "以下の中から、最も重要な使用用途をお選びください。",
+        "weight": "bold",
+        "size": "lg",
+        "margin": "md",
+        "adjustMode": "shrink-to-fit",
+        "wrap": true
+      },
+      {
+        "type": "separator",
+        "margin": "xxl"
+      },
+      {
+        "type": "box",
+        "layout": "vertical",
+        "margin": "xxl",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "a) ",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "decoration": "none",
+                "gravity": "top",
+                "scaling": true,
+                "weight": "bold",
+                "style": "normal",
+                "margin": "none"
+              },
+              {
+                "type": "text",
+                "text": "ソーシャルメディアやメッセージングアプリをよく利用する",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "wrap": true,
+                "margin": "xxl"
+              }
+            ],
+            "spacing": "none",
+            "position": "relative",
+            "margin": "none"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "b)",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "ゲームや動画をよく楽しむ",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "margin": "xxl"
+              }
+            ],
+            "spacing": "sm",
+            "margin": "lg"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "c)",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "仕事や学業での生産性向上が重要",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "margin": "xxl"
+              }
+            ],
+            "margin": "xl"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "d)",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "カメラ機能にこだわりたい",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "margin": "xxl"
+              }
+            ],
+            "margin": "xl"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "e)",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "その他（具体的に教えていただけると助かります）",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "wrap": true,
+                "margin": "xxl"
+              }
+            ],
+            "margin": "xl"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "f)",
+                "size": "lg",
+                "color": "#555555",
+                "flex": 0,
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "分からない",
+                "size": "md",
+                "color": "#111111",
+                "align": "start",
+                "wrap": true,
+                "margin": "xxl"
+              }
+            ],
+            "margin": "xl"
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [
+      {
+        "type": "text",
+        "text": "↓当てはまる番号をタップ！",
+        "color": "#ffffff",
+        "weight": "bold",
+        "align": "center",
+        "size": "xl"
+      }
+    ]
+  },
+  "styles": {
+    "header": {
+      "backgroundColor": "#da70d6",
+      "separator": true,
+      "separatorColor": "#da70d6"
+    },
+    "hero": {
+      "backgroundColor": "#da70d6"
+    },
+    "footer": {
+      "separator": true,
+      "backgroundColor": "#ba55d3"
+    }
+  }
+}
