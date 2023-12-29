@@ -57,11 +57,8 @@ async def convert_to_dict(input_str: str) -> dict[str, str]:
     result_dict = {}
     # 正規表現でkeyとvalueを取得
     pairs = re.findall(r"([^:|]+):([^|]*)", input_str)
-    for pair in pairs:
-        # 値が空文字列でない場合のみ辞書に追加
-        if pair[1].strip():
-            key, value = pair
-            result_dict[key.strip()] = value.strip()
+    for key, value in pairs:
+        result_dict[key.strip()] = value.strip()
     return result_dict
 
 
