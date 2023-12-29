@@ -4,6 +4,8 @@ import os
 import boto3
 import json
 import asyncio
+import re
+
 
 #retriever.pyのインポート
 import retriever
@@ -77,21 +79,22 @@ def send_recommendations(input):#recommend.pyを呼び出しておすすめを�
     global phones_info
     retrival=retriever.Retrieval()
     requirements=get_requirements(input["history"],input["input"])
+    print("要件取得完了")
     phones_info=retrival.retrieve(requirements)
     phones_info_dict=[convert_to_dict(phone_info.page_content) for phone_info in phones_info]
-    killer_sentences = asyncio.run(process_answers(requirements, phones_info_dict))
     print(phones_info)
+    killer_sentences = asyncio.run(process_answers(requirements, phones_info_dict))
     print(killer_sentences)
-    reply=""#Line用の返答を作成
+    reply="要件\n"+requirements #Line用の返答を作成
     for i in range(len(phones_info)):
         reply=reply+"\n機種名:"+phones_info_dict[i]["機種"]+"\nキラー文"
         for j in range(len(killer_sentences[i])):
-            reply=reply+"\n"+killer_sentences[i][j]
+            reply=reply+"\n"+str(j+1)+"個目\n"+killer_sentences[i][j]
     return reply
 
 
 
-def next_lambda(message,choices_num,log_message,event):#次のラムダ関数を呼び出す
+def next_lambda(message,choices_num,log_message,event,choices:None):#次のラムダ関数を呼び出す
     lambda_client = boto3.client('lambda')
     #ARN of plain_text_output
     #next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
@@ -99,7 +102,7 @@ def next_lambda(message,choices_num,log_message,event):#次のラムダ関数を
     response = lambda_client.invoke(
         FunctionName=next_function_name,
         InvocationType='Event',
-        Payload=json.dumps({'input_text': message, 'choices_num':choices_num, 'replyToken': event['replyToken'], 'userId': event['userId']} )
+        Payload=json.dumps({'input_text': message, 'choices_num':choices_num, 'replyToken': event['replyToken'], 'userId': event['userId'],'choices':choices} )
     )
     return log_message+event['userId']
     
@@ -116,7 +119,7 @@ def handler(event, context):
              人間は質問に対して提供された選択肢の中から一つを選んで回答します。次の情報は会話履歴です。"""),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{input}"),
-            ("system","これらの情報を基にして、ユーザーの状況やニーズを探る一つの質問とその質問に対する選択肢を作成して下さい。選択肢は3個から5個で(a,b,c,d,e,f)にして下さい。また、選択肢にできる限りその他や分からないという選択肢を設けて下さい。質問と選択肢の間には改行を入れてください。また、あなたはおすすめの提案をすることはできず、質問のみを行います。会話は日本語で行ってください。"),
+            ("system","これらの情報を基にして、ユーザーの状況やニーズを探る一つの質問とその質問に対する選択肢を作成して下さい。選択肢は3個から5個で(a,b,c,d,e,f)にして下さい。また、選択肢にできる限りその他や分からないという選択肢を設けて下さい。質問と選択肢の間には改行を入れてください。選択肢はa) 内容\nb) 内容\nc) 内容\nといった形式で言ってください。例としては、a) 軽量だがバッテリーはあまり持たない\nb) 普通の重さで普通のバッテリーの持続時間\nといった感じです。また、あなたはおすすめの提案をすることはできず、質問のみを行います。会話は日本語で行ってください。"),
         ])
     prompt_show_phones=PromptTemplate(
         input_variables=["history", "input"],
@@ -155,7 +158,7 @@ def handler(event, context):
                 'userId': event['userId']
             }
         )
-        return next_lambda("履歴をクリアしました",0,"clear memory of",event)
+        return next_lambda("履歴をクリアしました",0,"clear memory of",event,choices=None)
     
         
     table_response = table.get_item(
@@ -192,7 +195,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                 history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
             )
             |decision_prompt
-            | gpt4_model
+            | model
         )
         
 
@@ -204,7 +207,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         print(decision_response)
         if decision_response=="T":#提案を行う
             inputs = {"input":  event['input_text'], "history":memory.chat_memory.messages}
-            return next_lambda(send_recommendations(inputs),0,"reply to",event)
+            return next_lambda(send_recommendations(inputs),0,"reply to",event,choices=None)
             second_chain=(
                 RunnablePassthrough.assign(
                     history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
@@ -236,15 +239,37 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             response=second_chain.invoke(inputs)
         
         #下は選択肢の数を取得する部分
-        choices_num=chain_choicesnum.invoke({"question":response.content}).content
+        """choices_num=chain_choicesnum.invoke({"question":response.content}).content
         try:
-             choices_num=int(choices_num)
+            choices_num=int(choices_num)
         except ValueError:
-            choices_num=0
+            choices_num=0"""
         
         #下はログを出力する部分
-        print("System: " + response.content)
-        print("choices_num: " + str(choices_num))
+        input_text=response.content
+        print("System: " + input_text)
+        #print("choices_num: " + str(choices_num))
+        # Extracting the question from the text
+        question = re.search(r'^.*\n', response.content).group()
+        question = question.strip()#\nを取り除く
+        input_text=question
+        choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
+        print("question: \n" + question)
+        print("choices: ")
+        print(choices)
+        choices_num=len(choices)#選択肢の数を取得
+        if choices_num!=0:#選択肢がある時はa)を取り除く
+            choices_list=["a)","b)","c)","d)","e)","f)"]
+            for i in range(choices_num):
+                if choices_list[i] in choices[i]:
+                    choices[i]=choices[i].replace(choices_list[i],"")
+                else:
+                    choices_num=0
+                    input_text="内部エラーが発生していますが問題がないので、質問を続行します。"+response.content
+                    break
+        else:#選択肢がない時はそのまま返す
+            input_text=response.content
+        print(choices)
 
         #memoryに会話を記憶。下はtableに記憶を保存する部分
         memory.save_context(inputs, {"output": response.content})   
@@ -253,7 +278,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                         'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
                     })
     
-        return next_lambda(response.content, choices_num, "reply to", event)
+        return next_lambda(response.content, choices_num, "reply to", event, choices=choices)
 
 
     else:
@@ -289,4 +314,4 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         except ValueError:
             choices_num=0
     
-        return next_lambda(response.content, choices_num, "reply to", event)
+        return next_lambda(response.content, choices_num, "reply to", event, choices=None)
