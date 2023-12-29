@@ -239,24 +239,12 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             response=second_chain.invoke(inputs)
         
         #下は選択肢の数を取得する部分
-        """choices_num=chain_choicesnum.invoke({"question":response.content}).content
-        try:
-            choices_num=int(choices_num)
-        except ValueError:
-            choices_num=0"""
-        
-        #下はログを出力する部分
         input_text=response.content
         print("System: " + input_text)
-        #print("choices_num: " + str(choices_num))
-        # Extracting the question from the text
         question = re.search(r'^.*\n', response.content).group()
         question = question.strip()#\nを取り除く
         input_text=question
         choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
-        print("question: \n" + question)
-        print("choices: ")
-        print(choices)
         choices_num=len(choices)#選択肢の数を取得
         if choices_num!=0:#選択肢がある時はa)を取り除く
             choices_list=["a)","b)","c)","d)","e)","f)"]
@@ -269,7 +257,6 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                     break
         else:#選択肢がない時はそのまま返す
             input_text=response.content
-        print(choices)
 
         #memoryに会話を記憶。下はtableに記憶を保存する部分
         memory.save_context(inputs, {"output": response.content})   
@@ -278,7 +265,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                         'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
                     })
     
-        return next_lambda(response.content, choices_num, "reply to", event, choices=choices)
+        return next_lambda(input_text, choices_num, "reply to", event, choices=choices)
 
 
     else:
@@ -308,10 +295,23 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                     })
         
         #下は選択肢の数を取得する部分
-        choices_num=chain_choicesnum.invoke({"question":response.content}).content
-        try:
-             choices_num=int(choices_num)
-        except ValueError:
-            choices_num=0
+        input_text=response.content
+        print("System: " + input_text)
+        question = re.search(r'^.*\n', response.content).group()
+        question = question.strip()#\nを取り除く
+        input_text=question
+        choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
+        choices_num=len(choices)#選択肢の数を取得
+        if choices_num!=0:#選択肢がある時はa)を取り除く
+            choices_list=["a)","b)","c)","d)","e)","f)"]
+            for i in range(choices_num):
+                if choices_list[i] in choices[i]:
+                    choices[i]=choices[i].replace(choices_list[i],"")
+                else:
+                    choices_num=0
+                    input_text="内部エラーが発生していますが問題がないので、質問を続行します。"+response.content
+                    break
+        else:#選択肢がない時はそのまま返す
+            input_text=response.content
     
-        return next_lambda(response.content, choices_num, "reply to", event, choices=None)
+        return next_lambda(input_text, choices_num, "reply to", event, choices=choices)
