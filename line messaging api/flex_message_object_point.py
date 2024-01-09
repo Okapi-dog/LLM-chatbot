@@ -9,38 +9,52 @@ from linebot.models import FlexSendMessage, BubbleContainer, ImageComponent, Tex
 LINE_CHANNEL_ACCESS_TOKEN = os.environ['LINE_CHANNEL_ACCESS_TOKEN']
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 
-def get_random_s3_object_key(bucket_name):
-    # boto3ライブラリを使ってS3のクライアントを作成
-    s3 = boto3.client('s3')
-    # 指定したバケット内のオブジェクトの一覧を取得
-    response = s3.list_objects_v2(Bucket=bucket_name)
-    # 取得した一覧からオブジェクトの部分だけを取り出す
-    all_objects = response['Contents']
-    # オブジェクトの一覧からランダムに1つ選ぶ
-    random_object = random.choice(all_objects)
-    # ランダムに選んだオブジェクトのキー（名前）を返す
-    return random_object['Key']
-    
+def get_object_key_from_dynamodb(model_name):
+    # DynamoDBのテーブルを指定
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('your_table_name')  # ここにDynamoDBのテーブル名を指定
+    # 機種名で検索
+    response = table.get_item(Key={'model_name': model_name})
+    # オブジェクトキーを取得して返す
+    if 'Item' in response:
+        return response['Item']['object_key']
+    else:
+        return None
+
 def get_s3_image_url(bucket_name, object_key):
-    # boto3ライブラリを使ってS3のクライアントを作成
     s3 = boto3.client('s3')
-    # 指定したバケットとオブジェクトに対するpresigned URL（一時的に公開されるURL）を生成
-    # このURLは1時間（3600秒）後に有効期限が切れる
-    url = s3.generate_presigned_url('get_object',
-                                     Params={'Bucket': bucket_name, 'Key': object_key}, 
-                                     ExpiresIn=3600)
-    # 生成したURLを返す
+    url = s3.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': object_key}, ExpiresIn=3600)
     return url
 
+def get_spec_from_dynamodb(model_name):
+    # DynamoDBのテーブルを指定
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('your_table_name')  # ここにDynamoDBのテーブル名を指定
+
+    # 機種名で検索
+    response = table.get_item(Key={'model_name': model_name})
+
+    # スペックを取得して返す
+    if 'Item' in response:
+        return response['Item']['spec']
+    else:
+        return None
+
+bucket_name = 'your-bucket-name'
+object_key = get_object_key_from_dynamodb(bucket_name)
+image_url = get_s3_image_url(bucket_name, object_key)
+content_dict = get_spec_from_dynamodb(bucket_name, object_key)
+
+
 #スマホの詳細
-spec_legend = ["機種名", "カラー", "バッテリー容量", 
-                "対応する充電方法", 
-                "画面サイズ", "画面解像度", "背面カメラ画素数",
-                  "前面カメラ画素数", "長さ*幅*厚み", "重量"]
-specs = ["iPhone 12 Pro Max", "Pacific Blue, Graphite, Gold, Silver", "3687mAh",
-        "急速充電器(20W)、ワイヤレス充電器(15W)", "6.7インチ", "2778*1284", "1200万画素*3", "1200万画素",
-        "160.8*78.1*7.4mm", "226g"]
-content_dict = dict(zip(spec_legend, specs))
+# spec_legend = ["機種名", "カラー", "バッテリー容量", 
+#                 "対応する充電方法", 
+#                 "画面サイズ", "画面解像度", "背面カメラ画素数",
+#                   "前面カメラ画素数", "長さ*幅*厚み", "重量"]
+# specs = ["iPhone 12 Pro Max", "Pacific Blue, Graphite, Gold, Silver", "3687mAh",
+#         "急速充電器(20W)、ワイヤレス充電器(15W)", "6.7インチ", "2778*1284", "1200万画素*3", "1200万画素",
+#         "160.8*78.1*7.4mm", "226g"]
+# content_dict = dict(zip(spec_legend, specs))
 body_contents = [TextComponent(
                     text=i + ": "+ content_dict[i],
                     size='md',
