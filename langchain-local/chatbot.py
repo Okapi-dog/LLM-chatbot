@@ -36,21 +36,21 @@ class DynamoDB:
 
     def fetch_all(self) -> list[dict[str, str]]:
         # DynamoDBから全データを取得
-        return self.__table.scan()["Items"]
+        benchmark_dicts = self.__table.scan()["Items"]
+        if not benchmark_dicts:
+            raise ValueError("DynamoDB ScrapingPhoneStatus: データがありません")
+        return benchmark_dicts
 
-    def fetch_by_phone_name(self, phone_name: str) -> list[dict[str, str]] | None:
+    def fetch_by_name(self, phone_name: str) -> list[dict[str, str]]:
         # phone_nameに合致するデータを取得
         benchmark_dicts = self.__table.scan(FilterExpression=Attr(self.__phone_column_name).eq(phone_name))["Items"]
         if not benchmark_dicts:
-            return
+            raise ValueError("DynamoDB ScrapingPhoneStatus: データがありません")
         return benchmark_dicts
 
-    def fetch_by_cpu(self, cpu: str) -> list[dict[str, str]] | None:
-        # cpuに合致するデータを取得
-        benchmark_dicts = self.__table.scan(FilterExpression=Attr(self.__cpu_column_name).eq(cpu))["Items"]
-        if not benchmark_dicts:
-            return
-        return benchmark_dicts
+    def fetch_by_contained_cpu(self, cpu: str) -> list[dict[str, str]]:
+        # cpuが含まれるデータを取得
+        return self.__table.scan(FilterExpression=Attr(self.__cpu_column_name).contains(cpu))["Items"]
 
 
 class Retrieval:
@@ -79,8 +79,19 @@ class Retrieval:
         # 検索エンジンの設定
         self.__retriever = self.__vector_store.as_retriever(search_kwargs={"k": self.__n_search})
 
-    def retrieve(self, query: str) -> list[Document]:
-        return self.__retriever.get_relevant_documents(query)
+    def retrieve(self, query: str) -> list[dict[str, str]]:
+        # S3からベンチマークデータを取得して辞書型に変換
+        benchmark_documents: list[Document] = self.__retriever.get_relevant_documents(query)
+        return [convert_to_dict(benchmark_document.page_content) for benchmark_document in benchmark_documents]
+
+
+def convert_to_dict(input_str: str) -> dict[str, str]:
+    result_dict = {}
+    # 正規表現でkeyとvalueを取得
+    pairs = re.findall(r"([^:|]+):([^|]*)", input_str)
+    for key, value in pairs:
+        result_dict[key.strip()] = value.strip()
+    return result_dict
 
 
 class PhoneIdentifier:
@@ -147,80 +158,62 @@ def clean_phone_name(phone_name: str) -> str:
     return cleaned_phone_name
 
 
-def convert_to_dict(input_str: str) -> dict[str, str]:
-    result_dict = {}
-    # 正規表現でkeyとvalueを取得
-    pairs = re.findall(r"([^:|]+):([^|]*)", input_str)
-    for key, value in pairs:
-        result_dict[key.strip()] = value.strip()
-    return result_dict
+def clean_snapdragon_cpu(snapdragon_cpu: str) -> str:
+    # Snapdragon XXXの部分を抽出
+    cleaned_snapdragon_cpu: re.Match[str] | None = re.search(r"(Snapdragon \d+[G\+]*\+?)", snapdragon_cpu)
+    if cleaned_snapdragon_cpu is None:
+        raise ValueError("DynamoDB ScrapingPhoneStatus: SnapdragonのCPU名がありません")
+    return cleaned_snapdragon_cpu.group(1)
 
 
-def integrate_phone_dict(benchmark_phone_name: str, phone_dict: dict[str, str], answers: list[dict[str, str]]) -> None:
-    # スマホのデータとベンチマークのデータを統合
-    benchmark_dicts: list[dict[str, str]] | None = DynamoDB(BENCHMARK_TABLE_NAME).fetch_by_phone_name(
-        benchmark_phone_name
-    )
-    if benchmark_dicts is None:
-        return
-    benchmark_dict = benchmark_dicts[0]
-    del benchmark_dict["Name"]
-    del benchmark_dict["Processor"]
-    print(f"Benchmark DB: {benchmark_dict}")
-    answer_dict = phone_dict | benchmark_dict
+def integrate_phone_dict(
+    benchmark_dict: dict[str, str], phone_dict: dict[str, str], answers: list[dict[str, str]]
+) -> None:
+    benchmark_dict_cp = benchmark_dict.copy()
+    del benchmark_dict_cp["Name"]
+    del benchmark_dict_cp["Processor"]
+    answer_dict = phone_dict | benchmark_dict_cp
     answers.append(answer_dict)
 
 
 if __name__ == "__main__":
+    scraping_phone_status_db = DynamoDB(TABLE_NAME)
+    benchmark_db = DynamoDB(BENCHMARK_TABLE_NAME)
     # answers: 統合後のデータ, match_list: benchmarkがマッチしたかどうか
     answers: list[dict[str, str]] = []
     match_list: list[bool] = []
 
     # DynamoDBからデータを取得
-    phones: list[dict[str, str]] | None = DynamoDB(TABLE_NAME).fetch_all()
-    if phones is None:
-        raise ValueError("DynamoDB ScrapingPhoneStatus: データがありません")
+    phones: list[dict[str, str]] = scraping_phone_status_db.fetch_all()
 
     for phone_dict in phones:
+        # phone_nameの取得
         phone_name: str | None = phone_dict.get("機種")
         if phone_name is None:
             raise ValueError("DynamoDB ScrapingPhoneStatus: 機種名がありません")
         cleaned_phone_name = clean_phone_name(phone_name)
-        print(f"No.{len(answers)+1} ScrapingPhoneStatus: {cleaned_phone_name}")
+        print(f"No.{len(answers)+1}: {cleaned_phone_name}")
 
         # S3のベンチマークベクトルデータから似た名前のスマホを複数個取得
         retrieval_benchmark = Retrieval()
-        benchmark_documents: list[Document] = retrieval_benchmark.retrieve(cleaned_phone_name)
-
-        benchmarks: list[dict[str, str]] = []
-        benchmark_phone_names: list[str] = []
-        for benchmark_document in benchmark_documents:
-            # ベンチマークのデータを辞書型に変換
-            benchmark_dict: dict[str, str] = convert_to_dict(benchmark_document.page_content)
-            benchmarks.append(benchmark_dict)
-
-            # スマホの名前を取得
-            benchmark_phone_name: str | None = benchmark_dict.get("Name")
-            if benchmark_phone_name is None:
-                raise ValueError("S3 Benchmark: Nameがありません")
-            benchmark_phone_names.append(benchmark_phone_name)
-        # print(f"Benchmark S3: {benchmark_phone_names}")
+        benchmarks: list[dict[str, str]] = retrieval_benchmark.retrieve(cleaned_phone_name)
+        benchmark_phone_names: list[str] = [benchmark_dict["Name"] for benchmark_dict in benchmarks]
 
         # benchmark_phone_namesの中にcleaned_phone_nameがあればGPTを経由せずに統合してスキップ
         if cleaned_phone_name in benchmark_phone_names:
+            print(f"    同名: {cleaned_phone_name}")
             # マッチ率の計算用
             match_list.append(True)
-            print(f"同名マッチ: {cleaned_phone_name}")
-            # 統合
-            integrate_phone_dict(benchmark_phone_names[0], phone_dict, answers)
-            print("---------------------------------------------------")
+            benchmark_dicts = benchmark_db.fetch_by_name(cleaned_phone_name)
+            integrate_phone_dict(benchmark_dicts[0], phone_dict, answers)
+            print("\n---------------------------------------------------\n")
             continue
 
         # GPTでphone_nameに最も近いbenchmark_phone_nameを選択
         benchmark_phone_name = PhoneIdentifier(
             phone_name=cleaned_phone_name, model="gpt-4-1106-preview", output_parser=StrOutputParser()
         ).select_phone(benchmark_phone_names)
-        print(f"Benchmark S3: {benchmark_phone_name}")
+        print(f"    類似: {benchmark_phone_name}")
 
         # GPTで同じ機種かどうかを判定
         is_phone_equal = PhoneIdentifier(
@@ -228,28 +221,47 @@ if __name__ == "__main__":
         ).is_phone_same_model(benchmark_phone_name)
         # GPT-4の1分あたり10,000トークンのレート制限回避
         sleep(5)
-        print(f"同一判定: {is_phone_equal}")
+        print(f"    GPTによる同一判定: {is_phone_equal}")
 
-        # 同名の場合統合
+        # 同一の場合統合
         if is_phone_equal:
-            integrate_phone_dict(benchmark_phone_name, phone_dict, answers)
-            print("---------------------------------------------------")
+            benchmark_dicts = benchmark_db.fetch_by_name(benchmark_phone_name)
+            integrate_phone_dict(benchmark_dicts[0], phone_dict, answers)
+            # マッチ率の計算用
+            match_list.append(True)
+            print("\n---------------------------------------------------\n")
             continue
 
-        # 同名でない場合、CPUで統合
-        same_cpu_phones: list[dict[str, str]] | None = DynamoDB(BENCHMARK_TABLE_NAME).fetch_by_cpu(phone_dict["CPU"])
-        if same_cpu_phones is None:
-            # 同じCPUのスマホがない場合、そのまま追加してマッチ率を下げる
-            answers.append(phone_dict)
-            match_list.append(False)
-            print("同じCPUのスマホ: なし")
-            print("---------------------------------------------------")
+        # 同名でない場合、CPUで統合を試みる
+        # phone_cpuの取得
+        print()
+        phone_cpu: str | None = phone_dict.get("CPU")
+        if phone_cpu is None:
+            raise ValueError("DynamoDB ScrapingPhoneStatus: CPUがありません")
+
+        if "Snapdragon" in phone_cpu:
+            # Snapdragon XXXの部分を抽出
+            phone_cpu = clean_snapdragon_cpu(phone_cpu)
+
+        # DynamoDBからphone_cpuが含まれるデータを取得
+        print(f"    CPU: {phone_cpu}")
+        benchmark_dicts: list[dict[str, str]] = benchmark_db.fetch_by_contained_cpu(phone_cpu)
+
+        # 同CPUのスマホがあれば統合
+        if benchmark_dicts:
+            integrate_phone_dict(benchmark_dicts[0], phone_dict, answers)
+            # マッチ率の計算用
+            match_list.append(True)
+            print(f"    同CPU: {phone_cpu}")
+            print("\n---------------------------------------------------\n")
             continue
-        # 同じCPUのスマホがある場合、ベンチマークのデータと統合
-        same_cpu_phone = same_cpu_phones[0]
-        print(f"同じCPUのスマホ: {same_cpu_phone}")
-        integrate_phone_dict(same_cpu_phone["Name"], phone_dict, answers)
-        print("---------------------------------------------------")
+
+        # 同じCPUのスマホがない場合、そのまま追加してマッチ率を下げる
+        answers.append(phone_dict)
+        match_list.append(False)
+        print("    同CPU: なし")
+        print("\n---------------------------------------------------\n")
+        continue
 
     # 統合したデータをembedding
     embedding = OpenAIEmbeddings()
@@ -259,3 +271,5 @@ if __name__ == "__main__":
     print(f"マッチ率: {(match_list.count(True) / len(match_list)) * 100}%")
     # CPU同一判定実装前のマッチ率: 57.89473684210527%
     # CPU同一判定実装後のマッチ率: 63.33333333333333%
+    # SnapdragonCPUキャッチ実装後のマッチ率: 77.44360902255639%
+    # DynamoDBのcontain scan実装後のマッチ率: 92.4812030075188%
