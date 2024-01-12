@@ -29,11 +29,15 @@ class DynamoDB:
         self.__table = self.__dynamodb.Table(table_name)
         self.__column_name = "Name" if table_name == BENCHMARK_TABLE_NAME else "機種"
 
-    def fetch(self, phone_name: str | None = None) -> list[dict[str, str]]:
+    def fetch(self, phone_name: str | None = None) -> list[dict[str, str]] | None:
         # DynamoDBから全データまたはphone_nameに合致するデータを取得
         if phone_name is None:
             return self.__table.scan()["Items"]
-        return self.__table.scan(FilterExpression=Attr(self.__column_name).eq(phone_name))["Items"]
+        benchmark_dicts = self.__table.scan(FilterExpression=Attr(self.__column_name).eq(phone_name))["Items"]
+        if not benchmark_dicts:
+            print("DynamoDB Benchmark: 機種名がありません")
+            return
+        return benchmark_dicts
 
 
 class Retrieval:
@@ -58,7 +62,7 @@ class Retrieval:
         # 検索エンジンの設定
         self.__retriever = self.__vector_store.as_retriever(search_kwargs={"k": self.__n_search})
 
-    def retrieve(self, query: str) -> dict[str, str]:
+    def retrieve(self, query: str) -> list[Document]:
         return self.__retriever.get_relevant_documents(query)
 
 
@@ -75,29 +79,17 @@ class PhoneIdentifier:
         self.__model = ChatOpenAI(model=model, temperature=temperature, max_tokens=max_tokens)
         self.__output_parser = output_parser
 
-    # def extract_phone_name(self, input_str: str) -> str:
-    #     # GPTでブランドやメーカー名を除いたスマホの名前を抽出
-    #     prompt = PromptTemplate.from_template(
-    #         """スマートフォンの名前(phone_name)からブランド名やメーカー名を除いたモデル名を抽出してください。
-
-    #         例:
-
-    #         """
-    #     )
-
     def select_phone(self, benchmark_phone_names: list[str]) -> str:
         # GPTでphone_nameに最も近いbenchmark_phone_nameを選択
         prompt = PromptTemplate.from_template(
-            """指定されたスマートフォンのモデル名(phone_name)を元に、与えられたベンチマークモデル名のリスト(benchmark_phone_names)から最も適切なモデル名を選んでください。選択されたモデル名(benchmark_phone_name)のみを回答として提供してください。
-            具体的な例を以下に示します。
+            """以下のリストから、指定されたスマートフォンモデル({phone_name})に最も近いスマートフォンモデル名を選択してください。選択したモデル名のみを回答として提供してください。
+
+            スマートフォンモデル名のリスト: {benchmark_phone_names}
 
             例:
-            入力されたスマートフォンの名前: Google Pixel 7 256GB SIMフリー
-            ベンチマークのモデル名のリスト: ['Google Pixel 7', 'Google Pixel 7 Pro', 'Google Pixel', 'Google Pixel 4a 5G']
-            Google Pixel 7
-
-            対象スマートフォンの名前: {phone_name}
-            ベンチマークのモデル名のリスト: {benchmark_phone_names}
+            スマートフォンモデル: OPPO Reno9 A
+            スマートフォンモデル名のリスト: ['Oppo Reno 10x Zoom', 'Oppo Reno', 'Oppo Reno2', 'Oppo Reno Z']
+            回答: Oppo Reno2
             """
         )
         chain = prompt | self.__model | self.__output_parser
@@ -143,12 +135,28 @@ def convert_to_dict(input_str: str) -> dict[str, str]:
     return result_dict
 
 
+def integrate_phone_dict(benchmark_phone_name: str, phone_dict: dict[str, str], answers: list[dict[str, str]]) -> None:
+    # スマホのデータとベンチマークのデータを統合
+    benchmark_dicts: list[dict[str, str]] | None = DynamoDB(BENCHMARK_TABLE_NAME).fetch(benchmark_phone_name)
+    if benchmark_dicts is None:
+        return
+    benchmark_dict = benchmark_dicts[0]
+    print(f"Benchmarkから不要なデータ削除: {benchmark_dict.pop('Name')}, {benchmark_dict.pop('Processor')}")
+    print(f"Benchmark DB: {benchmark_dict}")
+    answer_dict = phone_dict | benchmark_dict
+    answers.append(answer_dict)
+
+
 if __name__ == "__main__":
-    answers = []
-    accuracy_list = []
+    # answers: 統合後のデータ, match_list: benchmarkがマッチしたかどうか
+    answers: list[dict[str, str]] = []
+    match_list: list[bool] = []
 
     # DynamoDBからデータを取得
-    phones_list = DynamoDB(TABLE_NAME).fetch()
+    phones_list: list[dict[str, str]] | None = DynamoDB(TABLE_NAME).fetch()
+    if phones_list is None:
+        raise ValueError("DynamoDB ScrapingPhoneStatus: データがありません")
+
     for phone_dict in phones_list:
         phone_name: str | None = phone_dict.get("機種")
         if phone_name is None:
@@ -156,49 +164,59 @@ if __name__ == "__main__":
         cleaned_phone_name = clean_phone_name(phone_name)
         print(f"ScrapingPhoneStatus: {cleaned_phone_name}")
 
-        # S3のベンチマークベクトルデータから似た名前のスマホを検索
+        # S3のベンチマークベクトルデータから似た名前のスマホを複数個取得
         retrieval_benchmark = Retrieval()
         benchmark_documents: list[Document] = retrieval_benchmark.retrieve(cleaned_phone_name)
 
-        # スマホの名前を取得
-        answer_benchmarks = []
-        benchmark_phone_names = []
+        benchmarks: list[dict[str, str]] = []
+        benchmark_phone_names: list[str] = []
         for benchmark_document in benchmark_documents:
-            benchmark_dict = convert_to_dict(benchmark_document.page_content)
+            # ベンチマークのデータを辞書型に変換
+            benchmark_dict: dict[str, str] = convert_to_dict(benchmark_document.page_content)
+            benchmarks.append(benchmark_dict)
+
+            # スマホの名前を取得
             benchmark_phone_name: str | None = benchmark_dict.get("Name")
             if benchmark_phone_name is None:
                 raise ValueError("S3 Benchmark: Nameがありません。")
-            answer_benchmarks.append(benchmark_dict)
             benchmark_phone_names.append(benchmark_phone_name)
         print(f"Benchmark S3: {benchmark_phone_names}")
 
+        # benchmark_phone_namesの中にcleaned_phone_nameがあればGPTを経由せずに統合してスキップ
+        if cleaned_phone_name in benchmark_phone_names:
+            match_list.append(True)
+            print(f"同じ機種名が含まれています: {cleaned_phone_name}")
+            integrate_phone_dict(benchmark_phone_names[0], phone_dict, answers)
+            print("---------------------------------------------------")
+            continue
+
         # GPTでphone_nameに最も近いbenchmark_phone_nameを選択
         benchmark_phone_name = PhoneIdentifier(
-            phone_name=cleaned_phone_name, model="gpt-3.5-turbo-1106", output_parser=StrOutputParser()
+            phone_name=cleaned_phone_name, model="gpt-4-1106-preview", output_parser=StrOutputParser()
         ).select_phone(benchmark_phone_names)
         print(f"選択された機種: {benchmark_phone_name}")
+
         # GPTで同じ機種かどうかを判定
         is_phone_equal = PhoneIdentifier(
             phone_name=cleaned_phone_name, model="gpt-4-1106-preview", output_parser=BooleanOutputParser()
         ).is_phone_same_model(benchmark_phone_name)
-        sleep(3)  # gpt-4の1分あたり10,000トークンのレート制限の回避
-        accuracy_list.append(is_phone_equal)
+
+        # GPT-4の1分あたり10,000トークンのレート制限回避
+        sleep(5)
+
+        # 統合
+        match_list.append(is_phone_equal)
         print(f"同じ機種かどうか: {is_phone_equal}")
         if is_phone_equal:
-            # IndexError: list index out of range
-            benchmark_dicts: dict[str, str] = DynamoDB(BENCHMARK_TABLE_NAME).fetch(benchmark_phone_name)
-            print(f"Benchmark DB: {benchmark_dicts}")
-            benchmark_dict = benchmark_dicts[0]
-            print("---------------------------------------------------")
-            answer_dict = phone_dict | benchmark_dict
-            answers.append(answer_dict)
+            integrate_phone_dict(benchmark_phone_name, phone_dict, answers)
         else:
-            print("---------------------------------------------------")
             answers.append(phone_dict)
+        print("---------------------------------------------------")
 
     # 統合したデータをembedding
     embedding = OpenAIEmbeddings()
     answers = ["".join(f"{key}:{value} | " for key, value in answer_dict.items()) for answer_dict in answers]
     vector_store = FAISS.from_texts(answers, embedding)
     vector_store.save_local("IntegratedPhoneStatus")
-    print(f"正答率: {(accuracy_list.count(True) / len(accuracy_list)) * 100}%")
+    print(f"マッチ率: {(match_list.count(True) / len(match_list)) * 100}%")
+
