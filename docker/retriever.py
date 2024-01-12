@@ -6,9 +6,12 @@ import sys
 import boto3
 #from config import dotenv_setting  # api_keyの読み込み
 from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+#from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
+#from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
+#from langchain.vectorstores import FAISS
+from langchain_community.vectorstores.faiss import FAISS
 
 # S3からダウンロードするファイルの設定
 BUCKET_NAME: Final = "vector-store-s3"
@@ -28,6 +31,7 @@ class Retrieval():
             s3.download_file(BUCKET_NAME, os.path.join(TABLE_NAME,PKL_FILE_PATH), os.path.join(tmp_dir, PKL_FILE_PATH))
             # FAISSインデックスのロード
             embedding = OpenAIEmbeddings()
+            #self.vector_store = FAISS.load_local(tmp_dir, embedding)
             self.vector_store = FAISS.load_local(tmp_dir, embedding)
         self.retriever = self.vector_store.as_retriever(search_kwargs={"k": 2})
 
