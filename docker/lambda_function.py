@@ -5,7 +5,7 @@ import boto3
 import json
 import asyncio
 import re
-
+from operator import itemgetter
 
 #retriever.pyのインポート
 import retriever
@@ -16,18 +16,21 @@ from recommend import convert_to_dict
 
 #langchainのインポート
 import langchain
-from langchain.prompts import PromptTemplate
+#from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 #langchain.debug = True
-from langchain.callbacks.tracers import ConsoleCallbackHandler
-from langchain.llms import OpenAI
-from operator import itemgetter
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
+#from langchain.callbacks.tracers import ConsoleCallbackHandler
+from langchain_community.llms import OpenAI
+#from langchain.llms import OpenAI
+from langchain_community.chat_models import ChatOpenAI
+#from langchain.chat_models import ChatOpenAI
+#from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.memory import ConversationBufferMemory,ConversationSummaryBufferMemory
 from langchain.schema import messages_from_dict, messages_to_dict
 from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
 #以下はDocumentStoreのためのインポート
-from langchain.docstore.document import Document
+from langchain_core.documents.base import Document
 
 phones_info: list[Document] = [Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]#phones_infoの初期化
 
@@ -195,7 +198,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                 history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
             )
             |decision_prompt
-            | model
+            | gpt4_model
         )
         
 
@@ -208,15 +211,6 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         if decision_response=="T":#提案を行う
             inputs = {"input":  event['input_text'], "history":memory.chat_memory.messages}
             return next_lambda(send_recommendations(inputs),0,"reply to",event,choices=None)
-            second_chain=(
-                RunnablePassthrough.assign(
-                    history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
-                )
-                |prompt_show_phones
-                | model
-            )
-            print("正常におすすめ提案。次の行動:"+decision_response)
-            response=second_chain.invoke(inputs)
         elif decision_response=="F":#質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
