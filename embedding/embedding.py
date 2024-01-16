@@ -1,5 +1,5 @@
+import pickle
 import re
-from pprint import pprint
 from typing import Final
 
 import boto3
@@ -9,7 +9,8 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 
 BUCKET_NAME: Final = "vector-store-s3"
-TABLE_NAME: Final = "ScrapingPhoneStatus"  # Benchmarkデータをembeddingしたい場合はBenchmarkに変更
+TABLE_NAME: Final = "Benchmark"  # Benchmarkデータをembeddingしたい場合はBenchmarkに変更
+PICKLE_FILE_PATH: Final = "integrated_phone_status.pickle"
 
 
 class DynamoDB:
@@ -36,8 +37,12 @@ def format_for_embedding(key: str, value: str) -> str:
 
 if __name__ == "__main__":
     phones = DynamoDB(TABLE_NAME).fetch()
+    # 統合データのembeddingの場合はこちら
+    # with open(PICKLE_FILE_PATH, "rb") as f:
+    #     phones: list[dict[str, str]] = pickle.load(f)
+
     answers = ["".join(format_for_embedding(key, value) for key, value in phone_dict.items()) for phone_dict in phones]
     embedding = OpenAIEmbeddings()
     vector_store = FAISS.from_texts(answers, embedding)
     # バイトデータを保存
-    vector_store.save_local("ScrapingPhoneStatus")
+    vector_store.save_local(TABLE_NAME)
