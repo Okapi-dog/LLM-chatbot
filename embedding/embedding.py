@@ -1,3 +1,4 @@
+"""langchain, langchain_openai(langchain version 0.1.0以降の場合), faiss-cpuをインストールする必要がある"""
 import os
 import pickle
 import re
@@ -6,7 +7,7 @@ from typing import Final
 import boto3
 from boto3.dynamodb.conditions import Attr
 
-# from config import dotenv_setting  # api_keyの読み込み　ローカル
+# from config import dotenv_setting  # api_keyの読み込み　環境変数にOPENAI_API_KEYを設定する必要がある
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
@@ -14,7 +15,7 @@ from langchain_openai import OpenAIEmbeddings
 # from langchain.embeddings import OpenAIEmbeddings
 # from langchain.vectorstores import FAISS
 
-os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY"
+# os.environ["OPENAI_API_KEY"] = "" # ローカルの場合コメントアウトを外して""にopenaiのapi_keyを設定すれば動く
 BUCKET_NAME: Final = "vector-store-s3"
 TABLE_NAME: Final = "IntegratedPhoneStatus"  # Benchmarkデータをembeddingしたい場合はBenchmarkに変更
 PICKLE_FILE_PATH: Final = "integrated_phone_status.pickle"
