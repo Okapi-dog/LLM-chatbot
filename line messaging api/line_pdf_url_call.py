@@ -3,6 +3,7 @@ import boto3
 import os
 from linebot import LineBotApi
 from linebot.models import FlexSendMessage
+from urllib.parse import quote
 
 def lambda_handler(event, context):
   # Extract the LINE user ID from the event object
@@ -29,6 +30,7 @@ def lambda_handler(event, context):
         if userId in file_name and file_name.endswith('.pdf'):
           file_url = f"https://{bucket_name}.s3.amazonaws.com/{file_name}"
           print("file_url:"+file_url)
+          print("file_urlエンコード:"+quote(file_url,safe=':/'))
     else:
       file_url=""
       
@@ -79,29 +81,78 @@ def lambda_handler(event, context):
               "action": {
                 "type": "uri",
                 "label": "ダウンロード",
-                "uri": file_url #ここにpdfのurlを入れる
+                "uri": quote(file_url,safe=':/') #ここにpdfのurlを入れる
               }
             }
           ]
         }
+        
       ]
     },
     "styles": {
       "header": {
-        "backgroundColor": "#da70d6",
-        #"separator": 'true',
-        #"separatorColor": "#da70d6"
+        "backgroundColor": "#da70d6"
       },
       "hero": {
         "backgroundColor": "#da70d6"
       },
       "footer": {
-        #"separator": 'true',
         "backgroundColor": "#ba55d3"
       }
     }
   }
-  flex_message = FlexSendMessage(alt_text="質問", contents=flex_message_contents)
+  flex_message_contents2 = {
+    "type": "bubble",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "おすすめ結果",
+          "size": "xl",
+          "color": "#000000",
+          "weight": "bold",
+          "align": "center",
+          "scaling": 'false'
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "ボタンを押してPDFを見る",
+          "weight": "bold",
+          "align": "center"
+        },
+        {
+          "type": "button",
+          "action": {
+            "type": "uri",
+            "label": "ダウンロード",
+            "uri": quote(file_url,safe=':/')
+          }
+        }
+      ],
+      "margin": "xxl",
+      "spacing": "sm"
+    },
+    "styles": {
+      "header": {
+        "backgroundColor": "#da70d6"
+      },
+      "hero": {
+        "backgroundColor": "#da70d6"
+      },
+      "footer": {
+        "backgroundColor": "#ba55d3"
+      }
+    }
+  }
+  flex_message = FlexSendMessage(alt_text="質問", contents=flex_message_contents2)
   # Flexメッセージを送信
   LINE_CHANNEL_ACCESS_TOKEN = os.environ['LINE_CHANNEL_ACCESS_TOKEN']
   LINE_BOT_API = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
