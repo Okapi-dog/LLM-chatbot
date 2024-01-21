@@ -1,0 +1,55 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Install TeX
+RUN yum install wget -y
+RUN yum install tar -y
+RUN yum install gzip -y
+RUN yum install perl -y
+RUN yum install perl-Digest-MD5 -y
+RUN yum install vi -y
+RUN wget http://ftp.jaist.ac.jp/pub/CTAN/systems/texlive/tlnet/install-tl-unx.tar.gz
+RUN tar xvf install-tl-unx.tar.gz
+
+COPY tex_install_profile ${LAMBDA_TASK_ROOT}
+RUN cd install-tl-* && \
+    ./install-tl --profile ../tex_install_profile
+#RUN /usr/local/texlive/*/bin/*/tlmgr path add
+#RUN /usr/local/texlive/*/bin/*/texhash path add
+RUN /usr/local/texlive/*/bin/*/tlmgr path add
+RUN /usr/local/texlive/*/bin/*/texhash path add
+
+COPY tlmgr_install.sh ${LAMBDA_TASK_ROOT}
+COPY tex_packages.txt ${LAMBDA_TASK_ROOT}
+RUN chmod +x tlmgr_install.sh
+RUN ./tlmgr_install.sh
+
+#ENV PATH $PATH:/usr/local/texlive/2023/bin/x86_64-linux
+ENV PATH $PATH:/usr/local/texlive/2023/bin/x86_64-linux
+
+COPY Koruri-master /usr/share/fonts/
+RUN fc-cache -vr /usr/share/fonts
+
+COPY catalog.tex ${LAMBDA_TASK_ROOT}
+COPY catalog_template.tex ${LAMBDA_TASK_ROOT}
+COPY catalog_template2.tex ${LAMBDA_TASK_ROOT}
+COPY point.png ${LAMBDA_TASK_ROOT}
+COPY review.jpg ${LAMBDA_TASK_ROOT}
+COPY noimage.jpg ${LAMBDA_TASK_ROOT}
+
+# Copy requirements.txt
+COPY requirements.txt ${LAMBDA_TASK_ROOT}
+
+# Install the specified packages
+RUN pip install -r requirements.txt
+
+# Copy function code
+COPY lambda_function.py ${LAMBDA_TASK_ROOT}
+
+COPY pdf_generate.sh ${LAMBDA_TASK_ROOT}
+RUN chmod +x pdf_generate.sh
+
+COPY initialize.py ${LAMBDA_TASK_ROOT}
+RUN python3 initialize.py catalog.tex
+
+# Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
+CMD [ "lambda_function.handler" ]

@@ -1,0 +1,175 @@
+\documentclass[lualatex,paper=a4,airticle]{jlreq}
+%\usepackage[no-math,deluxe,expert,haranoaji]{luatexja-preset}%原の味
+\usepackage[nfssonly,match,deluxe,haranoaji]{luatexja-preset}
+\usepackage{luatexja-otf}
+\usepackage{luatexja-fontspec}
+\usepackage{luatexja-preset}
+%\setmainjfont{HaranoAjiMincho}[AutoFakeSlant=0.25] % 日本語用フォントを設定
+%\setmainfont{HaranoAjiMincho}[AutoFakeSlant=0.25] % 英語用フォントを設定
+\setmainjfont{Koruri}[AutoFakeSlant=0.25] % 日本語用フォントを設定
+\setmainfont{Koruri}[AutoFakeSlant=0.25] % 英語用フォントを設定
+\newjfontfamily\myfont{HaranoAjiMincho}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage[dvipsnames]{xcolor}%色の幅を広げる
+\usepackage{multicol}
+\usepackage{tabularx} % 表のためのパッケージを追加
+\usepackage{fbox} % 枠のためのパッケージを追加
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage{bookmark}
+\usepackage{xurl}
+\hypersetup{unicode,bookmarksnumbered=true,hidelinks,final}
+
+\title{\vspace{-3.5cm}あなたにお勧めのSIMフリースマホ}
+\date{[[date]]}
+\author{By Genious Catalog  -相談して作るあなた専用の商品カタログ-}
+\begin{document}
+\maketitle
+\noindent
+% 上部セクション
+\begin{minipage}[t][0.45\textheight][t]{\textwidth}
+\begin{minipage}{0.3\textwidth}
+\href{http://www.apple.com}{
+\includegraphics[height=4.2cm]{[[image1]]} % Change the path to your image
+}
+\end{minipage}%
+\hfill
+\begin{minipage}{0.8\textwidth}
+\href{[[url1]]}{\huge{\textbf{[[name1]]}}}\par
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description11]]}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description12]]}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description13]]}
+\end{itemize}
+\end{minipage}
+\vspace{-1\baselineskip}
+\begin{multicols}{2}
+{\color{red}\textbf{参考価格}}\\
+{\fontspec{Lato}\LARGE\color{red}\textbf{ Y\llap{=}[[lprice1]] - Y\llap{=}[[hprice1]]}}\\
+\\
+\fbox{
+  \begin{minipage}{0.8\columnwidth}
+  {\gtfamily\ebseries\large スマホの詳細}\\
+  \begin{tabular}{|l|p{3.4cm}|}
+  \hline
+  画面サイズ & [[size1]] \\
+  \hline
+  背面カメラ & [[backcamera1]] \\
+  \hline
+  前面カメラ & [[frontcamera1]] \\
+  \hline
+  CPU性能 & [[CPU1]] \\
+  \hline
+  \end{tabular}
+  \end{minipage}
+}
+
+\columnbreak
+
+\hspace{-1.5cm} % 左の余白を減らす
+\fbox{
+  \begin{minipage}{1.34\columnwidth}
+  {\gtfamily\ebseries\large あなたへのおすすめポイント}\\
+ \vspace{-1\baselineskip}
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item [[compelling11]]
+\item [[compelling12]]
+\item [[compelling13]]
+\end{itemize}
+  \end{minipage}
+}
+
+
+\hspace{-1.5cm} % 左の余白を減らす
+\fbox{
+  \begin{minipage}{1.34\columnwidth}
+  {\gtfamily\ebseries\large あなたに似た人の評価}\\
+  \vspace{-1\baselineskip}
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item [[review11]]
+\item [[review12]]
+\end{itemize}
+  \end{minipage}
+}
+
+\end{multicols}
+\end{minipage}
+\vspace{1cm} % 上下のセクション間のスペース
+\begin{minipage}[b][0.45\textheight][b]{\textwidth}
+
+\begin{minipage}{0.3\textwidth}
+\href{http://www.apple.com}{
+\includegraphics[height=4.2cm]{[[image2]]} % Change the path to your image
+}
+\end{minipage}%
+\hfill
+\begin{minipage}{0.8\textwidth}
+\href{[[url2]]}{\huge{\textbf{[[name2]]}}}\par
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description21]]}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description22]]}
+\item {\color{Purple}\mcfamily\bfseries\myfont [[description23]]}
+\end{itemize}
+\end{minipage}
+\vspace{-1\baselineskip}
+\begin{multicols}{2}
+{\color{red}\textbf{参考価格}}\\
+{\fontspec{Lato}\LARGE\color{red}\textbf{ Y\llap{=} [[lprice2]] - Y\llap{=}[[hprice2]]}}\\
+\\
+\fbox{
+  \begin{minipage}{0.8\columnwidth}
+  {\gtfamily\ebseries\large スマホの詳細}\\
+  \begin{tabular}{|l|p{3.4cm}|}
+  \hline
+  画面サイズ & [[size2]] \\
+  \hline
+  背面カメラ & [[backcamera2]] \\
+  \hline
+  前面カメラ & [[frontcamera2]] \\
+  \hline
+  CPU性能 & [[CPU2]] \\
+  \hline
+  \end{tabular}
+  \end{minipage}
+}
+
+\columnbreak
+
+\hspace{-1.5cm} % 左の余白を減らす
+\fbox{
+  \begin{minipage}{1.34\columnwidth}
+  {\gtfamily\ebseries\large あなたへのおすすめポイント}\\
+  \vspace{-1\baselineskip}
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item [[compelling21]]
+\item [[compelling22]]
+\item [[compelling23]]
+\end{itemize}
+  \end{minipage}
+}
+
+
+\hspace{-1.5cm} % 左の余白を減らす
+\fbox{
+  \begin{minipage}{1.34\columnwidth}
+  {\gtfamily\ebseries\large あなたに似た人の評価}\\
+  \vspace{-1\baselineskip}
+\begin{itemize}
+\setlength{\itemindent}{-10pt}
+\item [[review21]]
+\item [[review22]]
+\end{itemize}
+  \end{minipage}
+}
+
+\end{multicols}
+
+\end{minipage}
+
+\end{document}
