@@ -7,15 +7,15 @@ import boto3
 #from config import dotenv_setting  # api_keyの読み込み
 from langchain.chains import RetrievalQA
 #from langchain.chat_models import ChatOpenAI
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 #from langchain.embeddings import OpenAIEmbeddings
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 #from langchain.vectorstores import FAISS
-from langchain_community.vectorstores.faiss import FAISS
+from langchain_community.vectorstores import FAISS
 
 # S3からダウンロードするファイルの設定
 BUCKET_NAME: Final = "vector-store-s3"
-TABLE_NAME: Final = "ScrapingPhoneStatus"
+TABLE_NAME: Final = "IntegratedPhoneStatus"
 FAISS_FILE_PATH: Final = "index.faiss"
 PKL_FILE_PATH: Final = "index.pkl"
 
@@ -33,7 +33,7 @@ class Retrieval():
             embedding = OpenAIEmbeddings()
             #self.vector_store = FAISS.load_local(tmp_dir, embedding)
             self.vector_store = FAISS.load_local(tmp_dir, embedding)
-        self.retriever = self.vector_store.as_retriever(search_kwargs={"k": 2})
+        self.retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
 
     def retrieve(self,query):#情報を検索して返す
         answer = self.retriever.get_relevant_documents(query)
