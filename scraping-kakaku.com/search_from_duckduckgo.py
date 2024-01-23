@@ -80,7 +80,7 @@ def process_search_results(urls):
     actual_urls = []
 
     for i, redirect_url in enumerate(urls):
-        if i < 3:  # 最初の3つのURLのみ処理
+        if i < 5:  # 最初の5つのURLのみ処理
             actual_url = extract_actual_url(redirect_url)
             actual_urls.append(actual_url)
             if actual_url:
@@ -98,22 +98,30 @@ def add_reviews_to_dynamodb(phone_name, reviews, urls):
     try:
         response = table.update_item(
             Key={'機種': phone_name},
-            UpdateExpression='SET #rv1 = :r1, #rv2 = :r2, #rv3 = :r3, #url1 = :u1, #url2 = :u2, #url3 = :u3',
+            UpdateExpression='SET #rv1 = :r1, #rv2 = :r2, #rv3 = :r3, #rv4 = :r4, #rv5 = :r5, #url1 = :u1, #url2 = :u2, #url3 = :u3, #url4 = :u4, #url5 = :u5',
             ExpressionAttributeValues={
                 ':r1': reviews[0],
                 ':r2': reviews[1],
                 ':r3': reviews[2],
+                ':r4': reviews[3],
+                ':r5': reviews[4],
                 ':u1': urls[0],
                 ':u2': urls[1],
-                ':u3': urls[2]
+                ':u3': urls[2],
+                ':u4': urls[3],
+                ':u5': urls[4]
             },
             ExpressionAttributeNames={
                 '#rv1': 'レビュー1',
                 '#rv2': 'レビュー2',
                 '#rv3': 'レビュー3',
+                '#rv4': 'レビュー4',
+                '#rv5': 'レビュー5',
                 '#url1': 'レビュー1のurl',
                 '#url2': 'レビュー2のurl',
-                '#url3': 'レビュー3のurl'
+                '#url3': 'レビュー3のurl',
+                '#url4': 'レビュー4のurl',
+                '#url5': 'レビュー5のurl'
             }
         )
     except Exception as e:
@@ -121,10 +129,10 @@ def add_reviews_to_dynamodb(phone_name, reviews, urls):
 
 # Lambda関数からの引数として最初に処理するスマホの番号を指定
 def lambda_handler(event, context):
-    start_phone_number = event.get('start_phone_number', 0)  # デフォルトは0番目のスマホから開始
-    #phone_names = get_phone_names_from_dynamodb()#IntegratedPhoneStatusにある全てのスマホに付いてのレビューを格納する
-    phone_names = ["AQUOS R8 pro SIMフリー", "moto g53j 5G SIMフリー", "OPPO A73 SIMフリー", "Redmi 12 5G SIMフリー", "motorola razr 40 SIMフリー"]#機種名を指定してレビューを格納する
-    processed_count =  0 # 処理済みのスマホの数をカウント
+    start_phone_number = event.get('start_phone_number', 14)  # デフォルトは0番目のスマホから開始
+    phone_names = get_phone_names_from_dynamodb()#IntegratedPhoneStatusにある全てのスマホに付いてのレビューを格納する
+    #phone_names = ["Xperia 10 V SIMフリー"]#機種名を指定してレビューを格納する
+    processed_count =  1 # 処理済みのスマホの数をカウント
 
     for i, phone_name in enumerate(phone_names):
         if i < start_phone_number:
@@ -132,19 +140,17 @@ def lambda_handler(event, context):
         summaries = []
         urls = []
 
-        for site in ["www.notebookcheck.net", "www.phonearena.com", "www.avforums.com"]:
-        #"iPhone 12 mini 128GB SIMフリー", "iPhone 15 Plus 256GB SIMフリー", "Phone (1) 128GB SIMフリー  [ブラック]", "moto g52j 5G SIMフリー", "Zenfone 10 128GB SIMフリー", "iPhone SE (第3世代) 64GB SIMフリー", "iPhone 12 mini 64GB SIMフリー"の場合["www.gsmarena.com", "www.trustedreviews.com", "www.notebookcheck.net"]
-        #他のスマホは["www.notebookcheck.net", "www.phonearena.com", "www.avforums.com"]を使用
-            url_results = search_duckduckgo("iPhone SE (2020) 256GB SIMフリー", [site])#iPhone SE (第2世代) 256GB SIMフリーについてはiPhone SE (2020) 256GB SIMフリーで検索
+        for site in ["www.notebookcheck.net", "www.phonearena.com", "www.avforums.com", "www.gsmarena.com", "www.trustedreviews.com"]:
+            url_results = search_duckduckgo(phone_name, [site])#iPhone SE (第2世代) 256GB SIMフリーについてはiPhone SE (2020) 256GB SIMフリーで検索
             if url_results:
                 summary_results, actual_urls = process_search_results(url_results)
                 summaries.extend(summary_results)
-                urls.extend(actual_urls[:3])  # 最初の3つのURLのみを使用
+                urls.extend(actual_urls[:5])  # 最初の5つのURLのみを使用
             else:
-                summaries.extend(['', '', ''])
-                urls.extend(['', '', ''])
+                summaries.extend(['', '', '', '', ''])
+                urls.extend(['', '', '', '', ''])
 
-        add_reviews_to_dynamodb(phone_name, summaries[:3], urls[:3])
+        add_reviews_to_dynamodb(phone_name, summaries[:5], urls[:5])
         print(f"追加できたスマホの番号: {processed_count}")
         processed_count += 1
         print(f"スマートフォン '{phone_name}' のレビューを追加しました。")
