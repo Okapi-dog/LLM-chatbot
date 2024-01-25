@@ -4,11 +4,14 @@ import os
 import boto3
 import json
 import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 import re
 from operator import itemgetter
 
 #retriever.pyのインポート
 import retriever
+from retriever import get_documents
 
 #recommend.pyのインポート
 from recommend import process_answers
@@ -16,15 +19,10 @@ from recommend import convert_to_dict
 
 #langchainのインポート
 import langchain
-#from langchain.prompts import PromptTemplate
 from langchain_core.prompts import PromptTemplate
 #langchain.debug = True
-#from langchain.callbacks.tracers import ConsoleCallbackHandler
 from langchain_openai import OpenAI
-#from langchain.llms import OpenAI
 from langchain_openai import ChatOpenAI
-#from langchain.chat_models import ChatOpenAI
-#from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder,SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.memory import ConversationBufferMemory,ConversationSummaryBufferMemory
 from langchain.schema import messages_from_dict, messages_to_dict
@@ -32,14 +30,17 @@ from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
 #以下はDocumentStoreのためのインポート
 from langchain_core.documents.base import Document
 
-phones_info: list[Document] = [Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]#phones_infoの初期化
+phones_info: list[Document] = [Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]
+#phones_infoの初期化(グローバル変数にする)
+model= ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
+gpt4_model= ChatOpenAI(model_name="gpt-4-1106-preview",max_tokens=1000)
+llm = OpenAI(model="gpt-3.5-turbo-instruct")
 
 
 
 
 def get_requirements(history,newinput):  #検索用に要件をまとめる
 
-    model = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
     summary_prompt = PromptTemplate(
         input_variables=["history", "new_inputs"],
         template='''AIと人間の会話から、人間が求めているスマホの要件をまとめてください。例を参考にして要件を作成してください。例は要件に含めないでください。
@@ -73,72 +74,106 @@ B
             | model
         )
     response=chain.invoke({"new_inputs":  newinput,"history":history})
-    print("\nsummary:")#一応要件結果をログに出力
+    print("\n要件:")#一応要件結果をログに出力
     print(response.content)
     return response.content
 
 
 def send_recommendations(input,event):#recommend.pyを呼び出しておすすめを返す
-    PDF_ALFA="arn:aws:lambda:ap-northeast-1:105837277682:function:PDF_ALPHA"
     pdf_tex="arn:aws:lambda:ap-northeast-1:105837277682:function:pdf_tex"
 
     global phones_info
-    retrival=retriever.Retrieval()
     requirements=get_requirements(input["history"],input["input"])
     print("要件取得完了")
-    phones_info=retrival.retrieve(requirements)
+    phones_info=get_documents("IntegratedPhoneStatus",requirements)
     phones_info_dict=[convert_to_dict(phone_info.page_content) for phone_info in phones_info]
-    print(phones_info)
-    killer_sentences = asyncio.run(process_answers(requirements, phones_info_dict))
-    print(killer_sentences)
+    try:
+        compelling,review = asyncio.run(process_answers(requirements, phones_info_dict))
+
+    except Exception as e:
+        print(e)
+        send_line("PDFの内容をGPTで生成する際にエラーが発生しました。時間をおいて再度お試しください。",0,event,None)
+        
+
     phone_info_with_compelling=phones_info_dict
-    reply="要件\n"+requirements #Line用の返答を作成
     for i in range(len(phones_info)):
-        reply=reply+"\n機種名:"+phones_info_dict[i]["機種"]+"\nキラー文"
-        phone_info_with_compelling[i]["compelling1"]=killer_sentences[i][0]
-        phone_info_with_compelling[i]["compelling2"]=killer_sentences[i][1]
-        phone_info_with_compelling[i]["compelling3"]=killer_sentences[i][2]
-        print(phone_info_with_compelling)
-        for j in range(len(killer_sentences[i])):
-            reply=reply+"\n"+str(j+1)+"個目\n"+killer_sentences[i][j]
+        phone_info_with_compelling[i]["compelling1"]=compelling[i][0]
+        phone_info_with_compelling[i]["compelling2"]=compelling[i][1]
+        phone_info_with_compelling[i]["compelling3"]=compelling[i][2]
+        phone_info_with_compelling[i]["review1"]=review[i]["review1"]
+        phone_info_with_compelling[i]["review2"]=review[i]["review2"]
+        phone_info_with_compelling[i]["review1_url"]=review[i]["review1_url"]
+        phone_info_with_compelling[i]["review2_url"]=review[i]["review2_url"]
     
-    to_pdf_lambda(PDF_ALFA,"",phone_info_with_compelling,event);
+    print(phone_info_with_compelling)#最終的にPDFに出力する情報をログに出力
+    
     to_pdf_lambda(pdf_tex,"",phone_info_with_compelling,event);
 
-    return reply
 
 
 
-def next_lambda(message,choices_num,log_message,event,choices:None):#次のラムダ関数を呼び出す
+def send_line(message,choices_num,event,choices:None):#lineにメッセージを送信する
     lambda_client = boto3.client('lambda')
     #ARN of plain_text_output
-    #next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
     next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:line_question_option_output'
-    response = lambda_client.invoke(
+    lambda_client.invoke(
         FunctionName=next_function_name,
         InvocationType='Event',
         Payload=json.dumps({'input_text': message, 'choices_num':choices_num, 'replyToken': event['replyToken'], 'userId': event['userId'],'choices':choices} )
     )
-    return log_message+event['userId']
 
-def to_pdf_lambda(next_function_name,message,phone_info_with_compelling,event):#次のラムダ関数を呼び出す
+def to_pdf_lambda(next_function_name,message,phone_info_with_compelling,event):#PDFを作成するラムダ関数を呼び出す
     lambda_client = boto3.client('lambda')
-    #ARN of plain_text_output
-    #next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:plain_text_output'
+    #next_function_nameはlambdaのARNを入れる
     response = lambda_client.invoke(
         FunctionName=next_function_name,
         InvocationType='Event',
         Payload=json.dumps({'input_text': message, 'phone_info_with_compelling':phone_info_with_compelling, 'replyToken': event['replyToken'], 'userId': event['userId']} )
     )
-    return event['userId']
-    
+
+
+def not_reccomendation(inputs,response,memory,table,event):
+    #下は選択肢の数を取得する部分
+    output_text=response.content
+    print("System: " + output_text)
+    try:
+        question = re.search(r'^.*\n', response.content).group()
+        question = question.strip()#\nを取り除く
+        output_text=question
+        choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
+        choices_num=len(choices)#選択肢の数を取得
+        if choices_num!=0:#選択肢がある時はa)を取り除く
+            choices_list=["a)","b)","c)","d)","e)","f)"]
+            for i in range(choices_num):
+                if choices_list[i] in choices[i]:
+                    choices[i]=choices[i].replace(choices_list[i],"")
+                else:
+                    choices_num=0
+                    output_text=response.content
+        else:#選択肢がない時はそのまま返す
+            output_text=response.content
+            choices=None
+    except:
+        choices_num=0
+        output_text=response.content
+        choices=None
+
+    #memoryに会話を記憶。下はtableに記憶を保存する部分
+    memory.save_context(inputs, {"output": response.content})   
+    table.put_item(Item={
+                    'userId': event['userId'],
+                    'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
+                })
+
+    send_line(output_text, choices_num, event, choices=choices)
+
+
 
 
 
 def handler(event, context):
 
-    model       = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
-    gpt4_model  = ChatOpenAI(model_name="gpt-4-1106-preview",max_tokens=1000)
+    
     prompt_question=ChatPromptTemplate.from_messages(
         [
             ("system", """あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、スマートフォン選びに関する質問を行い、ユーザーのニーズを理解することです。
@@ -154,14 +189,6 @@ def handler(event, context):
             ("human", "{input}"),
             ("system","また、あなたはおすすめの提案をすることはできず、質問に答えることのみを行います。会話は日本語で行ってください。"),
         ])
-    prompt_show_phones=PromptTemplate(
-        input_variables=["history", "input"],
-        template='''あなたは質問をしておすすめのスマホを複数台教えるチャットbots(一人は質問担当、もう一人はおすすめ提案担当)のおすすめ提案担当チャットbotです。あなたはおすすめのスマホを導くための質問を行うことが出来ません。あなたは会話履歴に基づいておすすめのスマホを教えなさい。日本語で会話すること。
-            会話:
-                {history}
-            新しい人間の回答:
-                {input}
-        ''')
     prompt_choicesnum=PromptTemplate(
         input_variables=["question"],
         template='''AIの返答から、AIの質問の選択肢の数(整数)を答えてください。返答に選択肢が存在しない場合は0と答えてください。例を参考に選択肢の数を答えてください。例は選択肢の数に含めないでください。
@@ -175,23 +202,19 @@ def handler(event, context):
         {question}
         選択肢の数:
         '''
-    ) 
-    chain_choicesnum = (
-            prompt_choicesnum
-            | model
-        )
+    )
     #memory = ConversationSummaryBufferMemory(llm=OpenAI(temperature=0),max_token_limit=200,return_messages=True,prompt=summary_prompt2)
     memory = ConversationBufferMemory(return_messages=True)#全ての会話履歴を保存するメモリー(ただし、今後は制限をかける予定)
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table('user-history')#ユーザーの会話履歴を保存するテーブル
 
-    if event['input_text']=="clear":#clearと入力された時にメモリーをクリアする
+    if event['input_text']=="clear" or event['input_text']=="おすすめのスマホを探す":#clearと入力された時にメモリーをクリアする
         table.delete_item(
             Key={
                 'userId': event['userId']
             }
         )
-        return next_lambda("履歴をクリアしました",0,"clear memory of",event,choices=None)
+        return send_line("履歴をクリアしました",0,event,choices=None)
     
         
     table_response = table.get_item(
@@ -205,10 +228,6 @@ def handler(event, context):
         print("以下は読み出したメモリー(memory.chat_memory.messages, memory.moving_summary_buffer,memory.load_memory_variables)")
         print(memory.chat_memory.messages)
         print(memory.load_memory_variables({}))
-        
-            
-        #最初の一回目の会話以外用のchain
-        decision_model = OpenAI(model_name="gpt-3.5-turbo-instruct",max_tokens=1000)
         #質問と提案の判断を行うプロンプトとチェーン
 
         decision_prompt = ChatPromptTemplate.from_messages([
@@ -231,7 +250,6 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             |decision_prompt
             | gpt4_model
         )
-        
 
         inputs = {"input":  event['input_text']}
         decision_response=decision_chain.invoke(inputs).content
@@ -241,10 +259,8 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         print(decision_response)
         if decision_response=="A":#提案を行う
             inputs = {"input":  event['input_text'], "history":memory.chat_memory.messages}
-            reccomendation=send_recommendations(inputs,event)
-            print(reccomendation)
-
-            return 'Hello from AWS Lambda using Python' + sys.version + '!'
+            send_recommendations(inputs,event)
+            print('提案を行います')
         elif decision_response=="B":#質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
@@ -253,7 +269,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                 |prompt_question
                 | model
             )
-            print("正常に質問。次の行動:"+decision_response)
+            print("正常に質問します")
             response=second_chain.invoke(inputs)
         elif decision_response=="C":#質問に答える
             second_chain=(
@@ -263,7 +279,7 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
                 |prompt_answer
                 | model
             )
-            print("正常に答える。次の行動:"+decision_response)
+            print("正常質問に答えます")
             response=second_chain.invoke(inputs)
         else:#分岐が不正な値の時でも質問を行う
             second_chain=(
@@ -275,44 +291,11 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             )
             print("不正に質問。次の行動:"+decision_response)
             response=second_chain.invoke(inputs)
-        
-        #下は選択肢の数を取得する部分
-        input_text=response.content
-        print("System: " + input_text)
-        try:
-            question = re.search(r'^.*\n', response.content).group()
-            question = question.strip()#\nを取り除く
-            input_text=question
-            choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
-            choices_num=len(choices)#選択肢の数を取得
-            if choices_num!=0:#選択肢がある時はa)を取り除く
-                choices_list=["a)","b)","c)","d)","e)","f)"]
-                for i in range(choices_num):
-                    if choices_list[i] in choices[i]:
-                        choices[i]=choices[i].replace(choices_list[i],"")
-                    else:
-                        choices_num=0
-                        input_text=response.content
-            else:#選択肢がない時はそのまま返す
-                input_text=response.content
-        except:
-            choices_num=0
-            input_text=response.content
-            choices=None
-
-        #memoryに会話を記憶。下はtableに記憶を保存する部分
-        memory.save_context(inputs, {"output": response.content})   
-        table.put_item(Item={
-                        'userId': event['userId'],
-                        'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
-                    })
-    
-        return next_lambda(input_text, choices_num, "reply to", event, choices=choices)
+        not_reccomendation(inputs,response,memory,table,event)
 
 
     else:
         #最初の一回目の会話用のchain
-        firstmodel = ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=500)
         firstprompt = PromptTemplate(
             input_variables=["input"],
             template='''あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、スマートフォン選びに関する質問を行い、ユーザーのニーズを理解することです。
@@ -322,38 +305,9 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             )
         firstchain = (
             firstprompt
-            |firstmodel
+            |model
         )
         inputs = {"input":  "質問を始めてください"}
         response=firstchain.invoke(inputs)
-
-        print("System: " + response.content)
-
-        #memoryに会話を記憶。下はtableに記憶を保存する部分
-        memory.save_context(inputs, {"output": response.content})
-        table.put_item(Item={
-                        'userId': event['userId'],
-                        'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False)
-                    })
-        
-        #下は選択肢の数を取得する部分
-        input_text=response.content
-        print("System: " + input_text)
-        question = re.search(r'^.*\n', response.content).group()
-        question = question.strip()#\nを取り除く
-        input_text=question
-        choices = re.findall(r'\b[abcdef]\) .+?(?=\n|$)', response.content)
-        choices_num=len(choices)#選択肢の数を取得
-        if choices_num!=0:#選択肢がある時はa)を取り除く
-            choices_list=["a)","b)","c)","d)","e)","f)"]
-            for i in range(choices_num):
-                if choices_list[i] in choices[i]:
-                    choices[i]=choices[i].replace(choices_list[i],"")
-                else:
-                    choices_num=0
-                    input_text="内部エラーが発生していますが問題がないので、質問を続行します。"+response.content
-                    break
-        else:#選択肢がない時はそのまま返す
-            input_text=response.content
-    
-        return next_lambda(input_text, choices_num, "reply to", event, choices=choices)
+        not_reccomendation(inputs,response,memory,table,event)
+        print('最初の質問を行いました')
