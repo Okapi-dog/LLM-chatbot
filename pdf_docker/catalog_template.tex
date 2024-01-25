@@ -10,6 +10,7 @@
 \setmainfont{Koruri}[AutoFakeSlant=0.25] % 英語用フォントを設定
 \newjfontfamily\myfont{HaranoAjiMincho}%源の味フォントをmyfontという名で設定
 \usepackage{ascmac}%ボックスを作るライブラリ
+\usepackage{setspace}%行間を変えるライブラリ
 \usepackage{hyperref}
 \usepackage[dvipsnames]{xcolor}%色の幅を広げる
 \usepackage{multicol}
@@ -21,159 +22,323 @@
 \usepackage{bookmark}
 \usepackage{xurl}
 \hypersetup{unicode,bookmarksnumbered=true,hidelinks,final}
+%以上はプリアンブル
 
 \begin{document}
-
 \begin{flushright}
-生成日: 2024-01-12
+  [[date]]
 \end{flushright}
 \begin{center}
-{\huge\textbf{あなたにお勧めのSIMフリースマホ}}\par
-By Genious Catalog  -相談して作るあなた専用の商品カタログ-
+  {\huge\textbf{あなたにお勧めのSIMフリースマホ}}\par
+  By Genious Catalog  -相談して作るあなた専用の商品カタログ-
 \end{center}
-
-%\maketitle
 \noindent
 % 上部セクション
+
 \begin{minipage}[t][0.43\textheight][t]{\textwidth}
-\begin{minipage}{0.23\textwidth}
-\href{[[url1]]}{
-\includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image1]]} % Change the path to your image
-}
-\end{minipage}%
-\hfill
-\begin{minipage}{0.77\textwidth}
-\href{[[url1]]}{\huge{\textbf{[[name1]]}}}\par
-\begin{itemize}
-%\setlength{\itemindent}{-10pt}
-\item {\color{Purple}\mcfamily\bfseries\myfont [[description11]]}
-\item {\color{Purple}\mcfamily\bfseries\myfont [[description12]]}
-\item {\color{Purple}\mcfamily\bfseries\myfont [[description13]]}
-\end{itemize}
-\end{minipage}
-\vspace{-1\baselineskip}
-\begin{multicols}{2}
-{\color{red}\textbf{参考価格}}\\
-{\fontspec{Lato}\LARGE\color{red}\textbf{\textyen [[lprice1]] - \textyen [[hprice1]]}}\\
-\\
-  \begin{minipage}{0.75\columnwidth}
-  \begin{tabular}{l p{4.5cm}}
-  \hline
-  画面サイズ & [[size1]] \\
-  \hline
-  背面カメラ & [[backcamera1]] \\
-  \hline
-  前面カメラ & [[frontcamera1]] \\
-  \hline
-  CPU性能 & [[CPU1]] \\
-  \hline
-  \end{tabular}
-  \end{minipage}
-\columnbreak
-
-\hspace{-2.3cm} % 左の余白を減らす
-  \begin{minipage}{1.25\columnwidth}
-  \vspace{-0.4cm}
-  \begin{itembox}[l]{
-  \begin{tabular}{@{}m{9mm}@{}m{6cm}}
-    \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
-  \end{tabular}
-}
-   \vspace{-1\baselineskip}
-\begin{itemize}
-\setlength{\itemindent}{-10pt}
-\item [[compelling11]]
-\item [[compelling12]]
-\item [[compelling13]]
-\end{itemize}
-\end{itembox}
-  \end{minipage}
-
-
-\hspace{-2.3cm} % 左の余白を減らす
-  \begin{minipage}{1.25\columnwidth}
-  \begin{itembox}[l]{{\gtfamily\ebseries\large あなたに似た人の評価}}
-
-  \vspace{-3mm}
-\includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url11]]}{\color{blue}\underline{レビュー1}}\par
-[[review11]]\par
-\includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url12]]}{\color{blue}\underline{レビュー2}}\par
-[[review12]]\par
-\end{itembox}
-  \end{minipage}
-
-\end{multicols}
-\end{minipage}
-%\vspace{1cm} % 上下のセクション間のスペース
-\begin{minipage}[b][0.43\textheight][b]{\textwidth}
   \begin{minipage}{0.23\textwidth}
-    \href{[[url1]]}{
-    \includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image2]]} % Change the path to your image
-    }
-    \end{minipage}%
-    \hfill
-    \begin{minipage}{0.77\textwidth}
-    \href{[[url1]]}{\huge{\textbf{[[name2]]}}}\par
+    \href{[[url1]]}{\includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image1]]}}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}{0.77\textwidth}
+    \href{[[lurl1]]}{\huge{\textbf{[[name1]]}}}\par
     \begin{itemize}
-    %\setlength{\itemindent}{-10pt}
-    \item {\color{Purple}\mcfamily\bfseries\myfont [[description21]]}
-    \item {\color{Purple}\mcfamily\bfseries\myfont [[description22]]}
-    \item {\color{Purple}\mcfamily\bfseries\myfont [[description23]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description11]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description12]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description13]]}
     \end{itemize}
+  \end{minipage}
+  \vspace{-1\baselineskip}
+  \begin{multicols}{2}
+    \begin{spacing}{0.5}
+      {\qquad↑画像をタップして \par \qquad 製品情報をチェック！}\\
+    \end{spacing}
+    {\color{red}\textbf{参考価格}}\\
+    {\fontspec{Lato}\LARGE\color{red}\textbf{\textyen [[lprice1]] - \textyen [[hprice1]]}}\\
+    \\
+    \begin{minipage}{0.75\columnwidth}
+      \begin{tabular}{l p{4.5cm}}
+        \hline
+        画面サイズ & [[size1]] \\
+        \hline
+        背面カメラ & [[backcamera1]] \\
+        \hline
+        前面カメラ & [[frontcamera1]] \\
+        \hline
+        CPU性能 & [[CPU1]] \\
+        \hline
+      \end{tabular}
     \end{minipage}
-    \vspace{-1\baselineskip}
-    \begin{multicols}{2}
+    \columnbreak
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \vspace{-0.4cm}
+      \begin{itembox}[l]{
+        \begin{tabular}{@{}m{9mm}@{}m{6cm}}
+          \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
+        \end{tabular}
+      }
+        \vspace{-1\baselineskip}
+        \begin{itemize}
+          \setlength{\itemindent}{-10pt}
+          \item [[compelling11]]
+          \item [[compelling12]]
+          \item [[compelling13]]
+        \end{itemize}
+      \end{itembox}
+    \end{minipage}
+
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \begin{itembox}[l]{{\gtfamily\ebseries\large あなたに似た人の評価}}
+        \vspace{-3mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url11]]}{\color{blue}\underline{レビュー1}}\par
+        \begin{spacing}{0.5}
+          {\small [[review11]]}\par
+        \end{spacing}
+        \vspace{2mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url12]]}{\color{blue}\underline{レビュー2}}\par
+        \begin{spacing}{0.5}
+          {\small [[review12]]}\par
+        \end{spacing}
+        \vspace{2mm}
+      \end{itembox}
+    \end{minipage}
+
+  \end{multicols}
+\end{minipage}
+
+\vspace{1cm} % 上下のセクション間のスペース
+
+\begin{minipage}[b][0.43\textheight][t]{\textwidth}
+  \begin{minipage}{0.23\textwidth}
+    \href{[[url2]]}{\includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image2]]}}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}{0.77\textwidth}
+    \href{[[lurl2]]}{\huge{\textbf{[[name2]]}}}\par
+    \begin{itemize}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description21]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description22]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description23]]}
+    \end{itemize}
+  \end{minipage}
+  \vspace{-1\baselineskip}
+  \begin{multicols}{2}
+    \begin{spacing}{0.5}
+      {\qquad↑画像をタップして \par \qquad 製品情報をチェック！}\\
+    \end{spacing}
     {\color{red}\textbf{参考価格}}\\
     {\fontspec{Lato}\LARGE\color{red}\textbf{\textyen [[lprice2]] - \textyen [[hprice2]]}}\\
     \\
-      \begin{minipage}{0.75\columnwidth}
+    \begin{minipage}{0.75\columnwidth}
       \begin{tabular}{l p{4.5cm}}
-      \hline
-      画面サイズ & [[size2]] \\
-      \hline
-      背面カメラ & [[backcamera2]] \\
-      \hline
-      前面カメラ & [[frontcamera2]] \\
-      \hline
-      CPU性能 & [[CPU2]] \\
-      \hline
+        \hline
+        画面サイズ & [[size2]] \\
+        \hline
+        背面カメラ & [[backcamera2]] \\
+        \hline
+        前面カメラ & [[frontcamera2]] \\
+        \hline
+        CPU性能 & [[CPU2]] \\
+        \hline
       \end{tabular}
-      \end{minipage}
-    
+    \end{minipage}
     \columnbreak
-    
+
     \hspace{-2.3cm} % 左の余白を減らす
-      \begin{minipage}{1.25\columnwidth}
+    \begin{minipage}{1.25\columnwidth}
       \vspace{-0.4cm}
       \begin{itembox}[l]{
-      \begin{tabular}{@{}m{9mm}@{}m{6cm}}
-        \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
-      \end{tabular}
-    }
-       \vspace{-1\baselineskip}
-    \begin{itemize}
-    \setlength{\itemindent}{-10pt}
-    \item [[compelling21]]
-    \item [[compelling22]]
-    \item [[compelling23]]
-    \end{itemize}
-    \end{itembox}
-      \end{minipage}
-    
-    
+        \begin{tabular}{@{}m{9mm}@{}m{6cm}}
+          \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
+        \end{tabular}
+      }
+        \vspace{-1\baselineskip}
+        \begin{itemize}
+          \setlength{\itemindent}{-10pt}
+          \item [[compelling21]]
+          \item [[compelling22]]
+          \item [[compelling23]]
+        \end{itemize}
+      \end{itembox}
+    \end{minipage}
+
+
     \hspace{-2.3cm} % 左の余白を減らす
-      \begin{minipage}{1.25\columnwidth}
+    \begin{minipage}{1.25\columnwidth}
       \begin{itembox}[l]{{\gtfamily\ebseries\large あなたに似た人の評価}}
-    
-      \vspace{-3mm}
-    \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url21]]}{\color{blue}\underline{レビュー1}}\par
-    [[review21]]\par
-    \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url22]]}{\color{blue}\underline{レビュー2}}\par
-    [[review22]]\par
-    \end{itembox}
-      \end{minipage}
-    
-    \end{multicols}
+        \vspace{-3mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url21]]}{\color{blue}\underline{レビュー1}}\par
+        \begin{spacing}{0.5}
+          {\small [[review21]]}\par
+        \end{spacing}
+        \vspace{2mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url22]]}{\color{blue}\underline{レビュー2}}\par
+        \begin{spacing}{0.5}
+          {\small [[review22]]}\par
+        \end{spacing}
+        \vspace{2mm}
+      \end{itembox}
+    \end{minipage}
+
+  \end{multicols}
+\end{minipage}
+
+\newpage
+
+\begin{minipage}[t][0.43\textheight][t]{\textwidth}
+  \begin{minipage}{0.23\textwidth}
+    \href{[[url3]]}{\includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image3]]}}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}{0.77\textwidth}
+    \href{[[lurl3]]}{\huge{\textbf{[[name3]]}}}\par
+    \begin{itemize}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description31]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description32]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description33]]}
+    \end{itemize}
+  \end{minipage}
+  \vspace{-1\baselineskip}
+  \begin{multicols}{2}
+    \begin{spacing}{0.5}
+      {\qquad↑画像をタップして \par \qquad 製品情報をチェック！}\\
+    \end{spacing}
+    {\color{red}\textbf{参考価格}}\\
+    {\fontspec{Lato}\LARGE\color{red}\textbf{\textyen [[lprice3]] - \textyen [[hprice3]]}}\\
+    \\
+    \begin{minipage}{0.75\columnwidth}
+      \begin{tabular}{l p{4.5cm}}
+        \hline
+        画面サイズ & [[size3]] \\
+        \hline
+        背面カメラ & [[backcamera3]] \\
+        \hline
+        前面カメラ & [[frontcamera3]] \\
+        \hline
+        CPU性能 & [[CPU3]] \\
+        \hline
+      \end{tabular}
+    \end{minipage}
+    \columnbreak
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \vspace{-0.4cm}
+      \begin{itembox}[l]{
+        \begin{tabular}{@{}m{9mm}@{}m{6cm}}
+          \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
+        \end{tabular}
+      }
+        \vspace{-1\baselineskip}
+        \begin{itemize}
+          \setlength{\itemindent}{-10pt}
+          \item [[compelling31]]
+          \item [[compelling32]]
+          \item [[compelling33]]
+        \end{itemize}
+      \end{itembox}
+    \end{minipage}
+
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \begin{itembox}[l]{{\gtfamily\ebseries\large あなたに似た人の評価}}
+        \vspace{-3mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url31]]}{\color{blue}\underline{レビュー1}}\par
+        \begin{spacing}{0.5}
+          {\small [[review31]]}\par
+        \end{spacing}
+        \vspace{2mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url32]]}{\color{blue}\underline{レビュー2}}\par
+        \begin{spacing}{0.5}
+          {\small [[review32]]}\par
+        \end{spacing}
+        \vspace{2mm}
+      \end{itembox}
+    \end{minipage}
+
+  \end{multicols}
+\end{minipage}
+
+\vspace{1cm} % 上下のセクション間のスペース
+
+\begin{minipage}[b][0.43\textheight][t]{\textwidth}
+  \begin{minipage}{0.23\textwidth}
+    \href{[[url4]]}{\includegraphics[height=4.2cm,width=4.2cm,keepaspectratio]{[[image4]]}}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}{0.77\textwidth}
+    \href{[[lurl4]]}{\huge{\textbf{[[name4]]}}}\par
+    \begin{itemize}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description41]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description42]]}
+      \item {\color{Purple}\mcfamily\bfseries\myfont [[description43]]}
+    \end{itemize}
+  \end{minipage}
+  \vspace{-1\baselineskip}
+  \begin{multicols}{2}
+    \begin{spacing}{0.5}
+      {\qquad↑画像をタップして \par \qquad 製品情報をチェック！}\\
+    \end{spacing}
+    {\color{red}\textbf{参考価格}}\\
+    {\fontspec{Lato}\LARGE\color{red}\textbf{\textyen [[lprice4]] - \textyen [[hprice4]]}}\\
+    \\
+    \begin{minipage}{0.75\columnwidth}
+      \begin{tabular}{l p{4.5cm}}
+        \hline
+        画面サイズ & [[size4]] \\
+        \hline
+        背面カメラ & [[backcamera4]] \\
+        \hline
+        前面カメラ & [[frontcamera4]] \\
+        \hline
+        CPU性能 & [[CPU4]] \\
+        \hline
+      \end{tabular}
+    \end{minipage}
+    \columnbreak
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \vspace{-0.4cm}
+      \begin{itembox}[l]{
+        \begin{tabular}{@{}m{9mm}@{}m{6cm}}
+          \includegraphics[width=8mm]{/var/task/point.png} & \gtfamily\ebseries\large あなたへのおすすめポイント
+        \end{tabular}
+      }
+        \vspace{-1\baselineskip}
+        \begin{itemize}
+          \setlength{\itemindent}{-10pt}
+          \item [[compelling41]]
+          \item [[compelling42]]
+          \item [[compelling43]]
+        \end{itemize}
+      \end{itembox}
+    \end{minipage}
+
+
+    \hspace{-2.3cm} % 左の余白を減らす
+    \begin{minipage}{1.25\columnwidth}
+      \begin{itembox}[l]{{\gtfamily\ebseries\large あなたに似た人の評価}}
+        \vspace{-3mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url41]]}{\color{blue}\underline{レビュー1}}\par
+        \begin{spacing}{0.5}
+          {\small [[review41]]}\par
+        \end{spacing}
+        \vspace{2mm}
+        \includegraphics[height=4mm]{/var/task/review.jpg}\href{[[review_url42]]}{\color{blue}\underline{レビュー2}}\par
+        \begin{spacing}{0.5}
+          {\small [[review42]]}\par
+        \end{spacing}
+        \vspace{2mm}
+      \end{itembox}
+    \end{minipage}
+
+  \end{multicols}
 \end{minipage}
 
 \end{document}
