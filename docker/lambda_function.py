@@ -33,7 +33,7 @@ from langchain_core.documents.base import Document
 phones_info: list[Document] = [Document(page_content='Nothing', metadata={}),Document(page_content='Nothing', metadata={})]
 #phones_infoの初期化(グローバル変数にする)
 model= ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
-gpt4_model= ChatOpenAI(model_name="gpt-4-1106-preview",max_tokens=1000)
+gpt4_model= ChatOpenAI(model_name="gpt-4-0125-preview",max_tokens=1000)
 llm = OpenAI(model="gpt-3.5-turbo-instruct")
 
 
@@ -68,10 +68,16 @@ B
 要件:
     ''',
     )
+    summary_prompt2 = PromptTemplate(
+        input_variables=["history", "new_inputs"],
+        template='''AIとユーザーの会話から、ユーザーが求めているスマホの要件を要約してください。
+            会話:{history}
+            新しい人間の返答:{new_inputs}
+            ユーザーが求める要件:''',)
     #プロンプトはここまで
     chain = (
-            summary_prompt
-            | model
+            summary_prompt2
+            | gpt4_model
         )
     response=chain.invoke({"new_inputs":  newinput,"history":history})
     print("\n要件:")#一応要件結果をログに出力
@@ -79,13 +85,13 @@ B
     return response.content
 
 
-def send_recommendations(input,event):#recommend.pyを呼び出しておすすめを返す
+def send_recommendations(input,event,memory):#recommend.pyを呼び出しておすすめを返す
     pdf_tex="arn:aws:lambda:ap-northeast-1:105837277682:function:pdf_tex"
 
     global phones_info
     requirements=get_requirements(input["history"],input["input"])
     print("要件取得完了")
-    phones_info=get_documents("IntegratedPhoneStatus",requirements)
+    phones_info=get_documents("IntegratedPhoneStatus-v3l",requirements)
     phones_info_dict=[convert_to_dict(phone_info.page_content) for phone_info in phones_info]
     try:
         compelling,review = asyncio.run(process_answers(requirements, phones_info_dict))
@@ -106,8 +112,16 @@ def send_recommendations(input,event):#recommend.pyを呼び出しておすす�
         phone_info_with_compelling[i]["review2_url"]=review[i]["review2_url"]
     
     print(phone_info_with_compelling)#最終的にPDFに出力する情報をログに出力
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('user-history')#ユーザーの履歴を保存するテーブル
+    memory.save_context(input, {"output": "おすすめのスマホ提案書をPDFで送信します。"})
+    table.put_item(Item={
+                    'userId': event['userId'],
+                    'chat_memory_messages': json.dumps(messages_to_dict(memory.chat_memory.messages),ensure_ascii=False),
+                    'phone_info_with_compelling': json.dumps(phone_info_with_compelling,ensure_ascii=False)
+                })
     
-    to_pdf_lambda(pdf_tex,"",phone_info_with_compelling,event);
+    to_pdf_lambda(pdf_tex,"",phone_info_with_compelling,event)
 
 
 
@@ -125,11 +139,14 @@ def send_line(message,choices_num,event,choices:None):#lineにメッセージを
 def to_pdf_lambda(next_function_name,message,phone_info_with_compelling,event):#PDFを作成するラムダ関数を呼び出す
     lambda_client = boto3.client('lambda')
     #next_function_nameはlambdaのARNを入れる
+
     response = lambda_client.invoke(
         FunctionName=next_function_name,
         InvocationType='Event',
         Payload=json.dumps({'input_text': message, 'phone_info_with_compelling':phone_info_with_compelling, 'replyToken': event['replyToken'], 'userId': event['userId']} )
     )
+
+
 
 
 def not_reccomendation(inputs,response,memory,table,event):
@@ -158,7 +175,7 @@ def not_reccomendation(inputs,response,memory,table,event):
         output_text=response.content
         choices=None
 
-    #memoryに会話を記憶。下はtableに記憶を保存する部分
+    #memoryにPDFを生成したということを記憶させる。下はtableに記憶を保存する部分
     memory.save_context(inputs, {"output": response.content})   
     table.put_item(Item={
                     'userId': event['userId'],
@@ -166,9 +183,6 @@ def not_reccomendation(inputs,response,memory,table,event):
                 })
 
     send_line(output_text, choices_num, event, choices=choices)
-
-
-
 
 
 def handler(event, context):
@@ -189,32 +203,38 @@ def handler(event, context):
             ("human", "{input}"),
             ("system","また、あなたはおすすめの提案をすることはできず、質問に答えることのみを行います。会話は日本語で行ってください。"),
         ])
-    prompt_choicesnum=PromptTemplate(
-        input_variables=["question"],
-        template='''AIの返答から、AIの質問の選択肢の数(整数)を答えてください。返答に選択肢が存在しない場合は0と答えてください。例を参考に選択肢の数を答えてください。例は選択肢の数に含めないでください。
-        例:
-        AI:
-        次の質問です。あなたはどのような用途でスマホを使用しますか？\na) ゲームをする\nb) 写真を撮る\nc) 仕事や学業に使う\nd) 動画を視聴する\ne) 音楽を聴く
-        選択肢の数:
-        5
-        例の終わり
-        AI:
-        {question}
-        選択肢の数:
-        '''
-    )
+    prompt_answer_pdf=ChatPromptTemplate.from_messages(
+        [   ("system", "次の情報は前回あなたが提案したスマホ提案PDFの情報です。{pdf_phone_info}"),
+            ("system", """あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、ユーザーからの質問などに答えることです。次の情報は会話履歴です。"""),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{input}"),
+            ("system","あなたはおすすめの提案をすることはできず、質問に答えることのみを行います。会話は日本語で行ってください。"),
+        ])
+    prompt_dialogue_pdf=ChatPromptTemplate.from_messages(
+        [   ("system", "次の情報は前回あなたが提案したスマホ提案PDFの情報です。{pdf_phone_info}"),
+            ("system", """あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、ユーザーの要望に応えることです。次の情報は会話履歴です。"""),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{input}"),
+            ("system","あなたはおすすめの提案をすることはできません。会話は日本語で行ってください。"),
+        ])
+    prompt_dialogue=ChatPromptTemplate.from_messages(
+        [   ("system", """あなたはスマートフォン選びをサポートする優秀な店員です。現在のあなたの役割は、ユーザーの要望に応えることです。次の情報は会話履歴です。"""),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{input}"),
+            ("system","あなたはおすすめの提案をすることはできません。会話は日本語で行ってください。"),
+        ])
     #memory = ConversationSummaryBufferMemory(llm=OpenAI(temperature=0),max_token_limit=200,return_messages=True,prompt=summary_prompt2)
     memory = ConversationBufferMemory(return_messages=True)#全ての会話履歴を保存するメモリー(ただし、今後は制限をかける予定)
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table('user-history')#ユーザーの会話履歴を保存するテーブル
 
-    if event['input_text']=="clear" or event['input_text']=="おすすめのスマホを探す":#clearと入力された時にメモリーをクリアする
+    if event['input_text']=="clear" or event['input_text']=="質問を始める":#clearと入力された時にメモリーをクリアする
         table.delete_item(
             Key={
                 'userId': event['userId']
             }
         )
-        return send_line("履歴をクリアしました",0,event,choices=None)
+        
     
         
     table_response = table.get_item(
@@ -225,18 +245,26 @@ def handler(event, context):
     if 'Item' in table_response:    #ユーザーの記憶がある時に記憶を読み込む
         print(table_response['Item'])
         memory.chat_memory.messages=messages_from_dict(json.loads(table_response['Item']['chat_memory_messages']))
+        if 'phone_info_with_compelling' in table_response['Item']:
+            #pdf_phone_info = json.loads(table_response['Item']['phone_info_with_compelling'])
+            pdf_phone_info = table_response['Item']['phone_info_with_compelling']
+            print(pdf_phone_info)
+        else:
+            pdf_phone_info = None
+            print("PDF情報なし")
         print("以下は読み出したメモリー(memory.chat_memory.messages, memory.moving_summary_buffer,memory.load_memory_variables)")
         print(memory.chat_memory.messages)
         print(memory.load_memory_variables({}))
         #質問と提案の判断を行うプロンプトとチェーン
 
         decision_prompt = ChatPromptTemplate.from_messages([
-            ("system", """あなたはスマートフォンに関する推薦を行うチャットボットです。会話履歴の分析を通じて、ユーザーに対して更なる質問を行うか、もしくはスマートフォンの推薦に進むか、ユーザーの質問などに答えるかを判断するのがあなたの役割です。以下のガイドラインに従って次のステップを決定してください：
+            ("system", """あなたはスマートフォンに関する推薦を行うチャットボットです。会話履歴の分析を通じて、ユーザーに対して更なる質問を行うか、もしくはスマートフォンの推薦に進むか、ユーザーの質問などに答えるか、ユーザーと対話するかを判断するのがあなたの役割です。以下のガイドラインに従って次のステップを決定してください：
 AIがこれまでの会話でユーザーに最低4つの質問を行っているかを確認します。
 これらの質問がユーザーのニーズや好みを明らかにするのに十分かどうかを検討します。
 もしAIが4つ以上の質問を行っていて、かつそれらの質問がユーザーのニーズを明確にしていると判断できる場合は、「A」と返答します。
 もしAIが4つ未満の質問しかしていないか、または4つ以上の質問をしていてもユーザーのニーズがまだ十分に明確ではないと判断される場合は、「B」と返答します。
 もしユーザーがAIに対して質問をしている場合は、「C」と返答します。
+もし上記の条件にあてはまらない場合やユーザーが対話をしようとしている時は、「D」と返答します。
 以下は直近の会話履歴です。                         
             """),
             MessagesPlaceholder(variable_name="history"),
@@ -259,8 +287,8 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
         print(decision_response)
         if decision_response=="A":#提案を行う
             inputs = {"input":  event['input_text'], "history":memory.chat_memory.messages}
-            send_recommendations(inputs,event)
-            print('提案を行います')
+            send_recommendations(inputs,event,memory)
+            return '提案を行います'
         elif decision_response=="B":#質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
@@ -272,15 +300,54 @@ AIがこれまでの会話でユーザーに最低4つの質問を行ってい�
             print("正常に質問します")
             response=second_chain.invoke(inputs)
         elif decision_response=="C":#質問に答える
-            second_chain=(
-                RunnablePassthrough.assign(
-                    history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
+            if pdf_phone_info:
+                print("pdf情報使用")
+                second_chain=(
+                    RunnablePassthrough.assign(
+                        history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
+                    )
+                    |prompt_answer_pdf
+                    | model
                 )
-                |prompt_answer
-                | model
-            )
+                #inputs["pdf_phone_info"]=json.dumps(pdf_phone_info)
+                inputs["pdf_phone_info"]=pdf_phone_info
+                response=second_chain.invoke(inputs)
+                del inputs["pdf_phone_info"]
+            else:
+                second_chain=(
+                    RunnablePassthrough.assign(
+                        history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
+                    )
+                    |prompt_answer
+                    | model
+                )
+                response=second_chain.invoke(inputs)
             print("正常質問に答えます")
-            response=second_chain.invoke(inputs)
+
+        elif decision_response=="D":#対話する
+            if pdf_phone_info:
+                print("pdf情報使用")
+                second_chain=(
+                    RunnablePassthrough.assign(
+                        history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
+                    )
+                    |prompt_dialogue_pdf
+                    | model
+                )
+                #inputs["pdf_phone_info"]=json.dumps(pdf_phone_info)
+                inputs["pdf_phone_info"]=pdf_phone_info
+                response=second_chain.invoke(inputs)
+                del inputs["pdf_phone_info"]
+            else:
+                second_chain=(
+                    RunnablePassthrough.assign(
+                        history=RunnableLambda(memory.load_memory_variables) | itemgetter("history")
+                    )
+                    |prompt_dialogue
+                    | model
+                )
+                response=second_chain.invoke(inputs)
+            print("正常質問に答えます")
         else:#分岐が不正な値の時でも質問を行う
             second_chain=(
                 RunnablePassthrough.assign(
