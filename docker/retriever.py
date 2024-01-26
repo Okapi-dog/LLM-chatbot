@@ -15,29 +15,52 @@ from langchain_community.vectorstores import FAISS
 
 # S3からダウンロードするファイルの設定
 BUCKET_NAME: Final = "vector-store-s3"
-TABLE_NAME: Final = "IntegratedPhoneStatus"
+
+#データベースの切替.InegratedPhoneStatusはada v2,IntegratedPhoneStatus-v3lはtext-embedding-3-largeで作成したもの。変更する際にはlambda_function.pyのsend_reccomendationの中のtable_nameも変更すること。
+#TABLE_NAME: Final = "IntegratedPhoneStatus"
+TABLE_NAME: Final = "IntegratedPhoneStatus-v3l"
+
 FAISS_FILE_PATH: Final = "index.faiss"
 PKL_FILE_PATH: Final = "index.pkl"
+
+#embeddingのモデルの切替
+#embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
+embedding = OpenAIEmbeddings(model="text-embedding-3-large")
 
 class Retrieval():
     def __init__(self):
         # boto3 S3クライアントの作成
         s3 = boto3.client("s3")
-
+        self.TABLE_NAME=TABLE_NAME
         # 一時ディレクトリの作成
         with tempfile.TemporaryDirectory() as tmp_dir:
             # S3からファイルをダウンロード
-            s3.download_file(BUCKET_NAME, os.path.join(TABLE_NAME,FAISS_FILE_PATH), os.path.join(tmp_dir, FAISS_FILE_PATH))
-            s3.download_file(BUCKET_NAME, os.path.join(TABLE_NAME,PKL_FILE_PATH), os.path.join(tmp_dir, PKL_FILE_PATH))
+            s3.download_file(BUCKET_NAME, os.path.join(self.TABLE_NAME,FAISS_FILE_PATH), os.path.join(tmp_dir, FAISS_FILE_PATH))
+            s3.download_file(BUCKET_NAME, os.path.join(self.TABLE_NAME,PKL_FILE_PATH), os.path.join(tmp_dir, PKL_FILE_PATH))
             # FAISSインデックスのロード
-            embedding = OpenAIEmbeddings()
             #self.vector_store = FAISS.load_local(tmp_dir, embedding)
             self.vector_store = FAISS.load_local(tmp_dir, embedding)
         self.retriever = self.vector_store.as_retriever(search_kwargs={"k": 4})
 
     def retrieve(self,query):#情報を検索して返す
+        
         answer = self.retriever.get_relevant_documents(query)
         return answer
+    
+def get_documents(table_name,query):#情報を検索して返す
+    # boto3 S3クライアントの作成
+    s3 = boto3.client("s3")
+    # 一時ディレクトリの作成
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # S3からファイルをダウンロード
+        s3.download_file(BUCKET_NAME, os.path.join(table_name,FAISS_FILE_PATH), os.path.join(tmp_dir, FAISS_FILE_PATH))
+        s3.download_file(BUCKET_NAME, os.path.join(table_name,PKL_FILE_PATH), os.path.join(tmp_dir, PKL_FILE_PATH))
+        # FAISSインデックスのロード
+        vector_store = FAISS.load_local(tmp_dir, embedding)
+    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    answer = retriever.get_relevant_documents(query)
+    print(answer)
+    return answer
     
     
 
@@ -45,5 +68,6 @@ class Retrieval():
 if __name__ == "__main__":  #テスト用,importされた時には実行されない
     query = "iPhone 11 Pro Maxに近いスペックのスマートフォンについて教えてください"
     a=Retrieval()
+    a.TABLE_NAME="new_table"
     answer=a.retrieve(query)
     print(answer)
