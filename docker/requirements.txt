@@ -3,4 +3,5 @@ langchain==0.1.0
 langchain-openai
 tiktoken
 faiss-cpu
+nest_asyncio
 
