@@ -29,16 +29,16 @@ def convert_to_dict(input_str: str) -> dict[str, str]:
 
 async def generate_recommendations(request: str, answer_dict: dict[str, str]) -> list[str]:
     prompt = PromptTemplate.from_template(
-        """ユーザーの求める要件と推薦するスマートフォンの情報が下に格納されています。これらを基にスマートフォンの推薦文を必ず40字以内で3つ生成してください。内容は推薦するスマートフォンの情報に書いてある内容のみにし、推薦するスマートフォンの情報に書いてない内容は絶対に含めないで下さい。推薦文に1.などは必要ありません。"@#$%^などと言った文字列は絶対に含めないでください。
+        """ユーザーの求める要件と推薦するスマートフォンの情報が下に格納されています。これらを基にスマートフォンの推薦文を必ず40字以内で3つ生成してください。内容は推薦するスマートフォンの情報に書いてある内容のみにし、推薦するスマートフォンの情報に書いてない内容は絶対に含めないで下さい。"@#$%^などと言った文字列は絶対に含めないでください。
 
         ユーザーの求める要件: {request}
         推薦するスマートフォンの情報: {answer_dict}
-        推薦文は絶対に40文字以内で三つ生成し、改行で区切ってください。ユーザーの求める要件を推薦文に含めないでください。
+        推薦文に1.などは必要ありません。ユーザーの求める要件を推薦文に含めないでください。推薦文は絶対に40文字以内で三つ生成し、改行で区切ってください。
         推薦文:
         """,
     )
     model = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
-    model_gpt4 = ChatOpenAI(model="gpt-4-1106-preview", temperature=0)
+    model_gpt4 = ChatOpenAI(model="gpt-4-0125-preview", temperature=0)
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
     # 推薦文の生成を非同期実行
@@ -81,7 +81,7 @@ def get_all_sum_dynamodb() -> list[dict[str, str]]:
 
 def escape_tex_special_chars(text):
     # List of TeX special characters that need to be escaped
-    special_chars = ['#', '$', '%', '&', '_', '{', '}', '~', '^', '\\']
+    special_chars = ['\\','#', '$', '%', '&', '_', '{', '}', '~', '^']
 
     # Escaping each special character
     for char in special_chars:
@@ -125,7 +125,7 @@ async def select_review(review_dict_list:list[dict[str,str]],request: str, phone
         """,
     )
     model = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
-    model_gpt4 = ChatOpenAI(model="gpt-4-1106-preview", temperature=0)
+    model_gpt4 = ChatOpenAI(model="gpt-4-0125-preview", temperature=0)
     llm = OpenAI(model="gpt-3.5-turbo-instruct")
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
@@ -166,7 +166,7 @@ async def sum_review(review_dict_list:list[dict[str,str]],request: str, answer_d
         """,
     )
     model = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
-    model_gpt4 = ChatOpenAI(model="gpt-4-1106-preview", temperature=0)
+    model_gpt4 = ChatOpenAI(model="gpt-4-0125-preview", temperature=0)
     llm = OpenAI(model="gpt-3.5-turbo-instruct")
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
