@@ -17,6 +17,8 @@ from retriever import get_documents
 from recommend import process_answers
 from recommend import convert_to_dict
 
+import tiktoken
+
 #langchainのインポート
 import langchain
 from langchain_core.prompts import PromptTemplate
@@ -36,7 +38,11 @@ model= ChatOpenAI(model_name="gpt-3.5-turbo-1106",max_tokens=1000)
 gpt4_model= ChatOpenAI(model_name="gpt-4-0125-preview",max_tokens=1000)
 llm = OpenAI(model="gpt-3.5-turbo-instruct")
 
-
+def num_tokens_from_string(string: str, model_name: str) -> int:    #文字列のトークン数を返す
+    """Returns the number of tokens in a text string."""
+    encoding = tiktoken.encoding_for_model(model_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
 
 
 def get_requirements(history,newinput):  #検索用に要件をまとめる
@@ -245,6 +251,16 @@ def handler(event, context):
     if 'Item' in table_response:    #ユーザーの記憶がある時に記憶を読み込む
         print(table_response['Item'])
         memory.chat_memory.messages=messages_from_dict(json.loads(table_response['Item']['chat_memory_messages']))
+        num_token=num_tokens_from_string(table_response['Item']['chat_memory_messages'], "gpt-4-0125-preview")
+        if num_token>2000:  #メモリーのトークン数が2000を超えたらメモリーをクリアする
+            #会話履歴を削除する
+            table.delete_item(
+            Key={
+                'userId': event['userId']
+            })
+            return send_line("申し訳ありませんが、回答履歴保存上限(2000token)を超えたため、会話履歴を削除しました。質問を始めるボタンより質問を開始してください。PC版をお使いの方は、「質問を始める」と入力してください。",0,event,None)
+
+        
         if 'phone_info_with_compelling' in table_response['Item']:
             #pdf_phone_info = json.loads(table_response['Item']['phone_info_with_compelling'])
             pdf_phone_info = table_response['Item']['phone_info_with_compelling']
