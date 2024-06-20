@@ -9,7 +9,7 @@ import time
 def lambda_handler(event, context):
     
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('kingdomcome')  # Replace with your table name
+    table = dynamodb.Table('Benchmark')  # Replace with your table name
 
     url = "https://browser.geekbench.com/android-benchmarks"
     response = requests.get(url)
@@ -29,11 +29,11 @@ def lambda_handler(event, context):
             if name1 == name2:
             # Put item in DynamoDB
                 table.put_item(Item={
-                    'Name': name1,
-                    'Processor': processor,
-                    'GHz': ghz,
-                    'SingleCore': benchmark_singlecore,
-                    'Multicore' : benchmark_multicore
+                    'Name': clean_text(name1),
+                    'Processor': clean_text(processor),
+                    'GHz': clean_text(ghz),
+                    'SingleCore': clean_text(benchmark_singlecore),
+                    'Multicore' : clean_text(benchmark_multicore)
                 })
     url2 = "https://browser.geekbench.com/ios-benchmarks"
     response = requests.get(url2)
@@ -41,7 +41,7 @@ def lambda_handler(event, context):
 
     IOS_singlecore = soup2.find('table', class_="table benchmark-chart-table").find('tbody').find_all('tr')
     IOS_multicore = soup2.find_all('table', class_="table benchmark-chart-table")[1].find('tbody').find_all('tr')
-    time.sleep(1)
+    time.sleep(0.)
     for phone in IOS_singlecore:
         name1 = phone.a.text
         processor = phone.find('div', class_='description').text.split("@")[0]
@@ -53,12 +53,17 @@ def lambda_handler(event, context):
             if name1 == name2 and 'iPhone' in name2:
             # Put item in DynamoDB
                 table.put_item(Item={
-                    'Name': name1,
-                    'Processor': processor,
-                    'GHz': ghz,
-                    'SingleCore': benchmark_singlecore,
-                    'Multicore' : benchmark_multicore
+                    'Name': clean_text(name1),
+                    'Processor': clean_text(processor),
+                    'GHz': clean_text(ghz),
+                    'SingleCore': clean_text(benchmark_singlecore),
+                    'Multicore' : clean_text(benchmark_multicore)
                 })
     
+    
     return {"message": "Data uploaded successfully to DynamoDB"}
-
+    
+    
+def clean_text(text):
+    """文字列の末尾、改行、先頭の空白文字と不要な文字を削除する関数"""
+    return text.replace('\n', '').replace('\"', '').replace('\\', '').strip()
