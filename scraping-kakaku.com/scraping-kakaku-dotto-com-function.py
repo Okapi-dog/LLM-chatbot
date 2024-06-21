@@ -6,11 +6,12 @@ import time
 
 import io
 import base64
-BUCKET_NAME="llm-chatbot-s3"
+
+BUCKET_NAME = "llm-chatbot-s3"
 
 def get_img_from_s3():
     s3 = boto3.client('s3')
-    responce = s3.get_object(Bucket=BUCKET_NAME, Key= OBJECT_KEY_NAME)
+    responce = s3.get_object(Bucket=BUCKET_NAME, Key=OBJECT_KEY_NAME)
     body = responce['Body'].read()
     body = base64.b64encode(body)
     return body
@@ -334,15 +335,17 @@ def lambda_handler(event, context):
         print(e)
         raise e
         
-    # 次のラムダ関数を呼び出す (-> delete_backn)
-    lambda_client = boto3.client('lambda')
-    #ARN of plain_text_output
-    next_function_name = 'arn:aws:lambda:ap-northeast-1:105837277682:function:delete_backn'
-    response = lambda_client.invoke(
-        FunctionName=next_function_name,
-        InvocationType='Event',
-        Payload=json.dumps({})
-    )
+    # DynamoDBテーブルからすべてのデータをスキャンする
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('ScrapingPhoneStatus')
+    response = table.scan()
+    items = response['Items']
+
+    # 各アイテムに対して改行文字を削除し、更新する
+    for item in items:
+        updated_item = {k: v.replace('\n', '') if isinstance(v, str) else v for k, v in item.items()}
+        table.put_item(Item=updated_item)
+    
     return {
         'statusCode': 200,
         'body': json.dumps('Successfully completed.')#終了宣言
